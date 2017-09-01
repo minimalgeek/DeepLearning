@@ -47,7 +47,9 @@ patsy==0.4.1
 pickleshare==0.7.4
 prompt-toolkit==1.0.15
 protobuf==3.4.0
+py==1.4.34
 Pygments==2.2.0
+pytest==3.2.1
 python-dateutil==2.6.1
 python-editor==1.0.3
 pytz==2017.2
