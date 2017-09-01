@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/DeepStock.iml" filepath="$PROJECT_DIR$/.idea/DeepStock.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/deepstock.iml" filepath="$PROJECT_DIR$/.idea/deepstock.iml" />
     </modules>
   </component>
 </project>
