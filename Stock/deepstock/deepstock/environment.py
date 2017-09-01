@@ -30,14 +30,17 @@ class Environment:
         days_to_holds = np.arange(min_days_to_hold,
                                   max_days_to_hold + 1)
 
-        self.action_space = [Action(ticker, act, days, 3) for act in Action.acts for days in days_to_holds for ticker in ticker_list]
+        self.action_space = [Action(ticker, act, days, 3)
+                             for act in Action.acts
+                             for days in days_to_holds
+                             for ticker in ticker_list]
+
         self.reset()
 
     def reset(self):
         self.deposit = self.initial_deposit
         self.current_index = self.window
         self.actions = {}
-        self.drawdowns = 0
 
         return self.state()
 

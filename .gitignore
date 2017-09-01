@@ -137,3 +137,8 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+
+# IDEA
+.idea
+/.idea
+/.idea/
