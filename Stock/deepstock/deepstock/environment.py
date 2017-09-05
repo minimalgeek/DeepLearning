@@ -3,6 +3,7 @@ import pandas as pd
 import pandas_datareader as pdr
 import datetime
 import logging
+import math
 from sklearn.preprocessing import StandardScaler
 
 from .action import Action
@@ -11,7 +12,10 @@ LOGGER = logging.getLogger(__name__)
 
 
 class Environment:
+
     TRAIN_DATA_PCT = 0.75
+    MIN_DEPOSIT_PCT = 0.7
+    SKIP_REWARD_MULTIPLIER = 0.01
 
     def __init__(self,
                  ticker_list,
@@ -20,9 +24,11 @@ class Environment:
                  to_date=datetime.datetime(2017, 1, 1),
                  window=50,
                  min_days_to_hold=1,
-                 max_days_to_hold=10):
+                 max_days_to_hold=10,
+                 on_train=True):
         self.initial_deposit = initial_deposit
         self.window = window
+        self.on_train = on_train
 
         def get(tickers, startdate, enddate):
             def data(ticker):
@@ -61,8 +67,8 @@ class Environment:
         train_X_scaled = scaler.fit_transform(train_X)
         test_X_scaled = scaler.transform(test_X)
 
-        self.train_X_df = pd.DataFrame(data=train_X_scaled, columns=train_X.columns)
-        self.test_X_df = pd.DataFrame(data=test_X_scaled, columns=test_X.columns)
+        self.train_X_df = pd.DataFrame(data=train_X_scaled, columns=train_X.columns, index=train_X.index)
+        self.test_X_df = pd.DataFrame(data=test_X_scaled, columns=test_X.columns, index=test_X.index)
 
     def reset(self):
         self.deposit = self.initial_deposit
@@ -71,51 +77,52 @@ class Environment:
 
         return self.state()
 
-    def score(self):
-        return self.deposit
-
-    def enough_data_provided(self):
-        return self.current_index + Environment.max_days_to_hold <= self.data_length
-
-    def state(self):
-        return self.data.iloc[self.current_index - self.window:self.current_index]['Close']
-
-    # def price_state(self):
-    #    return self.data.iloc[self.current_index - self.window:self.current_index]['Close']
-
-    def state_size(self):
-        return self.window
-
-    def action_size(self):
-        return len(self.action_space)
-
     def step(self, action_idx: int):
         action = self.action_space[action_idx]
         # print('\t=> current action is: {} at {}'.format(action, self.data.index[self.current_index]))
 
-        df = self.data.iloc[self.current_index: self.current_index + action.days]
-        on_date = df.index[0]
-        first_day_price = df.iloc[0]['Close']
-        last_day_price = df.iloc[-1]['Close']
+        covered_df = self.original_data_for_action(action)
+        on_date = covered_df.index[0]
+        first_day_price = covered_df.iloc[0]['Close']
+        last_day_price = covered_df.iloc[-1]['Close']
 
-        if action.act == BUY:
+        if action.act == Action.BUY:
             reward = last_day_price - first_day_price
-        elif action.act == SELL:
+        elif action.act == Action.SELL:
             reward = first_day_price - last_day_price
-        elif action.act == SKIP:
-            reward = 0
-
-        self.actions[on_date] = (action, reward)
+        elif action.act == Action.SKIP:
+            # let's say it's better not to spend money, instead of losing it
+            reward = math.fabs(last_day_price - first_day_price) * Environment.SKIP_REWARD_MULTIPLIER
 
         self.current_index += action.days
-        self.deposit += reward * (self.deposit * action.percentage / 100)
 
-        if reward < 0:
-            self.drawdowns += 1
-        else:
-            self.drawdowns = 0
+        # store information for further inspectation
+        self.deposit += reward * (self.deposit * action.percentage / 100)
+        self.actions[on_date] = (action, reward)
 
         next_state = self.state()
-        done = self.drawdowns > Environment.max_drawdowns
-        _ = None
-        return next_state, reward, done, _
+        done = self.deposit < self.initial_deposit * Environment.MIN_DEPOSIT_PCT
+        return next_state, reward, done
+
+    def original_data_for_action(self, action: Action):
+        indexes = self.state().index
+        return self.data.loc[action.ticker][indexes[0]:indexes[0 + action.days]]
+
+    def state(self):
+        if self.on_train:
+            return self.train_X_df.iloc[self.current_index - self.window: self.current_index]
+        else:
+            return self.test_X_df.iloc[self.current_index - self.window: self.current_index]
+
+    def state_size(self):
+        return self.state().shape
+
+    def action_size(self):
+        return len(self.action_space)
+
+    @staticmethod
+    def shrink_df_for_ticker(df, ticker):
+        idx = pd.IndexSlice
+        df = df.loc[:, idx[:, ticker]]
+        df.columns = df.columns.droplevel(1)
+        return df
