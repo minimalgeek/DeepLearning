@@ -2,8 +2,9 @@
 Trading agent trained on stock market (AAPL, GOOG, IBM) with **Deep Q Learning** technology
 
 ## Commands
-* python setup.py install
-* python setup.py test
+* **Install**: python setup.py install
+* **Run tests**: python setup.py test
+* **Run**: python -m deepstock.runner
 
 ## Built With
 
