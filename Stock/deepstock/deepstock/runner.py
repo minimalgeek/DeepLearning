@@ -4,6 +4,8 @@ from pprint import pprint
 from .agent import Agent
 from .environment import Environment
 
+AAPL_IBM_GOOG = 'aapl-ibm-goog.h5'
+
 LOGGER = logging.getLogger(__name__)
 
 epochs = 20  # number of games
@@ -34,9 +36,9 @@ def main(train):
             LOGGER.info('Balance for current game: %d', environment.deposit)
 
         pprint(environment.actions)
-        agent.save('aapl-ibm-goog.h5')
+        agent.save(AAPL_IBM_GOOG)
     else:
-        agent.model = agent.load('aapl-ibm-goog.h5')
+        agent.load(AAPL_IBM_GOOG)
 
     # Test on!
     state = environment.switch_to_test_data()

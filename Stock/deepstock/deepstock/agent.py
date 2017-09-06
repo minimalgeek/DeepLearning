@@ -75,12 +75,12 @@ class Agent:
             self.epsilon -= (1 / self.epochs)
         LOGGER.info('New epsilon is {}'.format(self.epsilon))
 
-    def act(self, state):
-        if random.random() < self.epsilon:  # choose random action
-            action = np.random.randint(0, 4)
+    def act(self, state, with_random=True):
+        if with_random and random.random() < self.epsilon:  # choose random action
+            action = np.random.randint(0, self.action_size)
         else:  # choose best action from Q(s,a) values
             q_val = self.model.predict(Agent.df_to_array(state), batch_size=1)
-            action = (np.argmax(q_val))
+            action = np.argmax(q_val)
         return action
 
     def remember(self, state, action, reward, next_state, done):
