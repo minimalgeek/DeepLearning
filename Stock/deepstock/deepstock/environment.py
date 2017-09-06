@@ -38,6 +38,7 @@ class Environment:
             return pd.concat(datas, keys=tickers, names=['Ticker', 'Date'])
 
         self.data = get(ticker_list, from_date, to_date)
+        self.max_current_index = len(self.data) - max_days_to_hold
 
         days_to_holds = np.arange(min_days_to_hold,
                                   max_days_to_hold + 1)
@@ -101,7 +102,8 @@ class Environment:
         self.actions[on_date] = (action, reward)
 
         next_state = self.state()
-        done = self.deposit < self.initial_deposit * Environment.MIN_DEPOSIT_PCT
+        done = self.deposit < self.initial_deposit * Environment.MIN_DEPOSIT_PCT or \
+               self.max_current_index < self.current_index
         return next_state, reward, done
 
     def original_data_for_action(self, action: Action):

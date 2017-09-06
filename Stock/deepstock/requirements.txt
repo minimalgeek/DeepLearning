@@ -1,4 +1,5 @@
 alembic==0.9.5
+backports.weakref==1.0rc1
 bcolz==0.12.1
 bleach==1.5.0
 Bottleneck==1.2.1
@@ -30,7 +31,7 @@ Keras==2.0.8
 Logbook==1.1.0
 lru-dict==1.1.6
 Mako==1.0.7
-Markdown==2.6.9
+Markdown==2.2.0
 MarkupSafe==1.0
 mistune==0.7.4
 multipledispatch==0.4.9
@@ -67,7 +68,7 @@ sortedcontainers==1.5.7
 SQLAlchemy==1.1.13
 statsmodels==0.8.0
 tables==3.4.2
-tensorflow-gpu==1.3.0
+tensorflow-gpu==1.2.0
 tensorflow-tensorboard==0.1.5
 testpath==0.3.1
 toolz==0.8.2

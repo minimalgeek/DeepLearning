@@ -1,10 +1,12 @@
+from collections import deque
+
 import numpy as np
 import pandas as pd
 import logging
 import random
 
 from keras.models import Sequential
-from keras.layers.core import Dense, Dropout, Activation
+from keras.layers.core import Dense, Dropout, Activation, Flatten
 from keras.optimizers import Adam
 from keras.losses import mean_squared_error
 
@@ -16,9 +18,12 @@ class Agent:
                  input_shape,
                  action_size,
                  epochs,
-                 batch_size=16,
+                 batch_size=8,
                  layer_decrease_multiplier=0.8,
-                 min_epsilon=0.1):
+                 min_epsilon=0.1,
+                 gamma=0.2,
+                 memory_buffer=32,
+                 memory_queue_buffer=128):
         self.input_shape = input_shape
         self.action_size = action_size
         self.epochs = epochs
@@ -26,9 +31,12 @@ class Agent:
         self.batch_size = batch_size
         self.layer_decrease_multiplier = layer_decrease_multiplier
         self.min_epsilon = min_epsilon
+        self.gamma = gamma # how much should we look into the future predicitons
 
         self.epsilon = 1
-        self.memory = []
+        self.memory_buffer = memory_buffer
+        self.memory = deque(maxlen=memory_queue_buffer)
+        self.replay_index = 0
 
         self._build_model()
 
@@ -39,6 +47,7 @@ class Agent:
 
         model = Sequential()
         model.add(Dense(first_layer_size, input_shape=self.input_shape))
+        model.add(Flatten())
         model.add(Activation('relu'))
         model.add(Dropout(0.1))
 
@@ -61,19 +70,11 @@ class Agent:
                             third_layer_size))
         self.model = model
 
-    def remember(self, state, action, reward, next_state, done):
-        self.memory.append((state, action, reward, next_state, done))
-
     def decrease_epsilon(self):
         if self.epsilon > self.min_epsilon:
             self.epsilon -= (1 / self.epochs)
 
     def act(self, state):
-        # if np.random.rand() <= self.epsilon:
-        #     return random.randrange(self.action_size)
-        # act_values = self.model.predict(state)
-        # return np.argmax(act_values[0])  # returns action
-
         if random.random() < self.epsilon:  # choose random action
             action = np.random.randint(0, 4)
         else:  # choose best action from Q(s,a) values
@@ -81,22 +82,50 @@ class Agent:
             action = (np.argmax(q_val))
         return action
 
-    def replay(self, batch_size):
-        minibatch = random.sample(self.memory, batch_size)
-        for state, action, reward, next_state, done in minibatch:
-            target = self.model.predict(state)
-            if done:
-                target[0][action] = reward
+    def remember(self, state, action, reward, next_state, done):
+        action_tuple = (state, action, reward, next_state, done)
+        self.memory.append(action_tuple)
+        if len(self.memory) >= self.memory_buffer:
+            self.replay()
+            # state = new_state ???
+
+    def replay(self):
+        # randomly sample our experience replay memory
+        mini_batch = random.sample(self.memory, self.memory_buffer)
+        LOGGER.info('Experience replay for {} memories'.format(len(mini_batch)))
+        x_train = []
+        y_train = []
+        for mem in mini_batch:
+            state, action, reward, next_state, done = mem
+
+            state_vals = np.expand_dims(state.values, axis=0)  # (50, 15) -> (1, 50, 15)
+            next_state_vals = np.expand_dims(next_state.values, axis=0)  # (50, 15) -> (1, 50, 15)
+
+            old_q = self.model.predict(state_vals, batch_size=1)
+            new_q = self.model.predict(next_state_vals, batch_size=1)
+            max_q = np.max(new_q)
+            y = np.zeros((1, self.action_size))
+            y[:] = old_q[:]
+            if not done:
+                update = (reward + (self.gamma * max_q))
             else:
-                a = self.model.predict(next_state)[0]
-                t = self.target_model.predict(next_state)[0]
-                target[0][action] = reward + self.gamma * t[np.argmax(a)]
-            self.model.fit(state, target, epochs=1, verbose=0)
-        if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
+                update = reward
+            y[0][action] = update
+            x_train.append(state.values)
+            y_train.append(y[0])
+
+        x_train = np.array(x_train)  # (32, 50, 15)
+        y_train = np.array(y_train)  # (32, 90)
+        self.model.fit(x_train,
+                       y_train,
+                       batch_size=self.batch_size,
+                       epochs=1,
+                       verbose=1)
 
     def load(self, name):
+        LOGGER.info("Load '%s' model", name)
         self.model.load_weights(name)
 
     def save(self, name):
+        LOGGER.info("Save '%s' model", name)
         self.model.save_weights(name)

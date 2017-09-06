@@ -2,7 +2,7 @@ import pytest
 import logging
 from datetime import datetime
 from deepstock.agent import Agent
-from environment import Environment
+from deepstock.environment import Environment
 
 LOGGER = logging.getLogger(__name__)
 
@@ -24,3 +24,8 @@ def test_act(agent: Agent):
     action = agent.act(environment.state())
     assert type(action) == int
     assert action < environment.action_size()
+
+
+def test_remember_smoke(agent: Agent):
+    for i in range(40):
+        agent.remember(environment.state(), 0, 0.3, environment.state(), False)
