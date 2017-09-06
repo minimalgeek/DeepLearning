@@ -38,7 +38,7 @@ class Environment:
             return pd.concat(datas, keys=tickers, names=['Ticker', 'Date'])
 
         self.data = get(ticker_list, from_date, to_date)
-        self.max_current_index = len(self.data) - max_days_to_hold
+        self.max_current_index = len(self.data) - max_days_to_hold - 1
 
         days_to_holds = np.arange(min_days_to_hold,
                                   max_days_to_hold + 1)
