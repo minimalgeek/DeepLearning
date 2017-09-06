@@ -12,7 +12,6 @@ LOGGER = logging.getLogger(__name__)
 
 
 class Environment:
-
     TRAIN_DATA_PCT = 0.75
     MIN_DEPOSIT_PCT = 0.7
     SKIP_REWARD_MULTIPLIER = 0.01
@@ -29,6 +28,7 @@ class Environment:
         self.initial_deposit = initial_deposit
         self.window = window
         self.on_train = on_train
+        self.max_days_to_hold = max_days_to_hold
 
         def get(tickers, startdate, enddate):
             def data(ticker):
@@ -38,7 +38,6 @@ class Environment:
             return pd.concat(datas, keys=tickers, names=['Ticker', 'Date'])
 
         self.data = get(ticker_list, from_date, to_date)
-        self.max_current_index = len(self.data) - max_days_to_hold - 1
 
         days_to_holds = np.arange(min_days_to_hold,
                                   max_days_to_hold + 1)
@@ -75,7 +74,10 @@ class Environment:
         self.deposit = self.initial_deposit
         self.current_index = self.window
         self.actions = {}
-
+        if self.on_train:
+            self.max_current_index = len(self.train_X_df) - self.max_days_to_hold
+        else:
+            self.max_current_index = len(self.test_X_df) - self.max_days_to_hold
         return self.state()
 
     def step(self, action_idx: int):
