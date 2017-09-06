@@ -46,6 +46,7 @@ class Environment:
                              for act in Action.acts
                              for days in days_to_holds
                              for ticker in ticker_list]
+        self.minimal_deposit = self.initial_deposit * Environment.MIN_DEPOSIT_PCT
 
         self.preprocess_data()
         self.reset()
@@ -108,7 +109,7 @@ class Environment:
         self.actions[on_date] = (action, reward)
 
         next_state = self.state()
-        done = self.deposit < self.initial_deposit * Environment.MIN_DEPOSIT_PCT or \
+        done = self.deposit < self.minimal_deposit or \
                self.max_current_index < self.current_index
         return next_state, reward, done
 

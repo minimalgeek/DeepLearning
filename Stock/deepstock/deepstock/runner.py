@@ -6,11 +6,12 @@ from .environment import Environment
 
 LOGGER = logging.getLogger(__name__)
 
-epochs = 50  # number of games
+epochs = 20  # number of games
 
 
-def main():
+def main(train):
     environment = Environment(['AAPL', 'IBM', 'GOOG'],
+                              initial_deposit=1000,
                               min_days_to_hold=3,
                               max_days_to_hold=7)
     agent = Agent(environment.state_size(),
@@ -19,24 +20,34 @@ def main():
                   memory_queue_buffer=256,
                   gamma=0.3)
 
-    for i in range(epochs):
-        state = environment.reset()
-        done = False
+    if train:
+        for i in range(epochs):
+            state = environment.reset()
+            done = False
 
-        while not done:
-            action = agent.act(state)
-            next_state, reward, done = environment.step(action)
-            agent.remember(state, action, reward, next_state, done)
-            state = next_state
-        agent.decrease_epsilon()
-        LOGGER.info('Balance for current game: %d', environment.deposit)
+            while not done:
+                action = agent.act(state)
+                next_state, reward, done = environment.step(action)
+                agent.remember(state, action, reward, next_state, done)
+                state = next_state
+            agent.decrease_epsilon()
+            LOGGER.info('Balance for current game: %d', environment.deposit)
 
-    pprint(environment.actions)
-    agent.save('aapl-ibm-goog.h5')
+        pprint(environment.actions)
+        agent.save('aapl-ibm-goog.h5')
+    else:
+        agent.model = agent.load('aapl-ibm-goog.h5')
 
+    # Test on!
     state = environment.switch_to_test_data()
-    # TODO continue with testing
+    done = False
 
+    while not done:
+        action = agent.act(state, False)
+        next_state, reward, done = environment.step(action)
+        state = next_state
+    LOGGER.info('Balance for current game: %d', environment.deposit)
+    pprint(environment.actions)
 
 if __name__ == '__main__':
-    main()
+    main(train=False)

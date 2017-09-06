@@ -14,3 +14,6 @@ class Action:
 
     def __str__(self):
         return '{} - {} - {}'.format(self.ticker, self.act, self.days)
+
+    def __repr__(self):
+        return str(self)
