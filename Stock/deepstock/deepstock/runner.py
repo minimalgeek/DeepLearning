@@ -8,7 +8,7 @@ AAPL_IBM_GOOG = 'aapl-ibm-goog.h5'
 
 LOGGER = logging.getLogger(__name__)
 
-epochs = 50  # number of games
+epochs = 10  # number of games
 
 
 def main(train):
@@ -18,7 +18,7 @@ def main(train):
                               max_days_to_hold=7)
     agent = Agent(environment.state_size(),
                   environment.action_size(),
-                  epochs,
+                  epochs=epochs,
                   batch_size=16,
                   memory_queue_buffer=256,
                   gamma=0.3)

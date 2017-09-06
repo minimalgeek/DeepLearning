@@ -95,9 +95,9 @@ class Environment:
         last_day_price = covered_df.iloc[-1]['Close']
 
         if action.act == Action.BUY:
-            reward = last_day_price - first_day_price
+            reward = (last_day_price - first_day_price)/first_day_price
         elif action.act == Action.SELL:
-            reward = first_day_price - last_day_price
+            reward = (first_day_price - last_day_price)/first_day_price
         elif action.act == Action.SKIP:
             # let's say it's better not to spend money, instead of losing it
             reward = 0  # math.fabs(last_day_price - first_day_price) * Environment.SKIP_REWARD_MULTIPLIER
