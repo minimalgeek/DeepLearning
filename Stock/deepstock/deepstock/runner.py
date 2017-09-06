@@ -33,8 +33,9 @@ def main():
 
     agent.save('aapl-ibm-goog.h5')
 
-    environment.on_train = False
-    environment.reset()
+    state = environment.switch_to_test_data()
+    # TODO continue with testing
+
 
 if __name__ == '__main__':
     main()

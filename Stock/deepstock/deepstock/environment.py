@@ -80,6 +80,10 @@ class Environment:
             self.max_current_index = len(self.test_X_df) - self.max_days_to_hold
         return self.state()
 
+    def switch_to_test_data(self):
+        self.on_train = False
+        return self.reset()
+
     def step(self, action_idx: int):
         action = self.action_space[action_idx]
         # print('\t=> current action is: {} at {}'.format(action, self.data.index[self.current_index]))
