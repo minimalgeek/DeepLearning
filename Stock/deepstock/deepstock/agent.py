@@ -79,7 +79,7 @@ class Agent:
         if random.random() < self.epsilon:  # choose random action
             action = np.random.randint(0, 4)
         else:  # choose best action from Q(s,a) values
-            q_val = self.model.predict(state, batch_size=1)
+            q_val = self.model.predict(Agent.df_to_array(state), batch_size=1)
             action = (np.argmax(q_val))
         return action
 
@@ -99,8 +99,8 @@ class Agent:
         for mem in mini_batch:
             state, action, reward, next_state, done = mem
 
-            state_vals = np.expand_dims(state.values, axis=0)  # (50, 15) -> (1, 50, 15)
-            next_state_vals = np.expand_dims(next_state.values, axis=0)  # (50, 15) -> (1, 50, 15)
+            state_vals = Agent.df_to_array(state)
+            next_state_vals = Agent.df_to_array(next_state)
 
             old_q = self.model.predict(state_vals, batch_size=1)
             new_q = self.model.predict(next_state_vals, batch_size=1)
@@ -130,3 +130,7 @@ class Agent:
     def save(self, name):
         LOGGER.info("Save '%s' model", name)
         self.model.save_weights(name)
+
+    @staticmethod
+    def df_to_array(df):
+        return np.expand_dims(df.values, axis=0)  # (50, 15) -> (1, 50, 15)

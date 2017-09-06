@@ -11,3 +11,6 @@ class Action:
         self.act = act
         self.days = days
         self.percentage = percentage
+
+    def __str__(self):
+        return '{} - {} - {}'.format(self.ticker, self.act, self.days)

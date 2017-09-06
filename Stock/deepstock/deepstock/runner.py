@@ -1,11 +1,12 @@
 import logging
+from pprint import pprint
 
 from .agent import Agent
 from .environment import Environment
 
 LOGGER = logging.getLogger(__name__)
 
-epochs = 3000  # number of games
+epochs = 50  # number of games
 
 
 def main():
@@ -14,23 +15,23 @@ def main():
                               max_days_to_hold=7)
     agent = Agent(environment.state_size(),
                   environment.action_size(),
-                  epochs)
+                  epochs,
+                  memory_queue_buffer=256,
+                  gamma=0.3)
 
     for i in range(epochs):
         state = environment.reset()
         done = False
 
         while not done:
-            try:
-                action = agent.act(state)
-                next_state, reward, done = environment.step(action)
-                agent.remember(state, action, reward, next_state, done)
-                state = next_state
-            except ValueError as e:
-                print(e)
+            action = agent.act(state)
+            next_state, reward, done = environment.step(action)
+            agent.remember(state, action, reward, next_state, done)
+            state = next_state
         agent.decrease_epsilon()
         LOGGER.info('Balance for current game: %d', environment.deposit)
 
+    pprint(environment.actions)
     agent.save('aapl-ibm-goog.h5')
 
     state = environment.switch_to_test_data()

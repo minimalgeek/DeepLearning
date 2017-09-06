@@ -99,7 +99,7 @@ class Environment:
             reward = first_day_price - last_day_price
         elif action.act == Action.SKIP:
             # let's say it's better not to spend money, instead of losing it
-            reward = math.fabs(last_day_price - first_day_price) * Environment.SKIP_REWARD_MULTIPLIER
+            reward = 0  # math.fabs(last_day_price - first_day_price) * Environment.SKIP_REWARD_MULTIPLIER
 
         self.current_index += action.days
 
