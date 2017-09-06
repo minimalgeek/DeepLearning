@@ -13,7 +13,7 @@ LOGGER = logging.getLogger(__name__)
 
 class Environment:
     TRAIN_DATA_PCT = 0.75
-    MIN_DEPOSIT_PCT = 0.7
+    MIN_DEPOSIT_PCT = 0.5
     SKIP_REWARD_MULTIPLIER = 0.01
 
     def __init__(self,

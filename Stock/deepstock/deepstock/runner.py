@@ -52,4 +52,4 @@ def main(train):
     pprint(environment.actions)
 
 if __name__ == '__main__':
-    main(train=False)
+    main(train=True)
