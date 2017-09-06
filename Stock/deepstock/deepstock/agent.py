@@ -42,7 +42,6 @@ class Agent:
 
     def _build_model(self):
         first_layer_size = int(self.input_shape[0] *
-                               self.input_shape[1] *
                                self.layer_decrease_multiplier)
         second_layer_size = int(first_layer_size * self.layer_decrease_multiplier)
         third_layer_size = int(second_layer_size * self.layer_decrease_multiplier)
@@ -51,15 +50,15 @@ class Agent:
         model.add(Dense(first_layer_size, input_shape=self.input_shape))
         model.add(Flatten())
         model.add(Activation('relu'))
-        model.add(Dropout(0.1))
+        model.add(Dropout(0.2))
 
         model.add(Dense(second_layer_size))
         model.add(Activation('relu'))
-        model.add(Dropout(0.1))
+        model.add(Dropout(0.2))
 
         model.add(Dense(third_layer_size))
         model.add(Activation('relu'))
-        model.add(Dropout(0.1))
+        model.add(Dropout(0.2))
 
         model.add(Dense(self.action_size))
         model.add(Activation('linear'))  # linear output so we can have range of real-valued outputs
