@@ -17,13 +17,17 @@ def main():
                   epochs)
 
     for i in range(epochs):
-        state = environment.state()
+        state = environment.reset()
         done = False
 
         while not done:
-            action = agent.act(state)
-            next_state, reward, done = environment.step(action)
-            agent.remember(state, action, reward, next_state, done)
+            try:
+                action = agent.act(state)
+                next_state, reward, done = environment.step(action)
+                agent.remember(state, action, reward, next_state, done)
+                state = next_state
+            except ValueError as e:
+                print(e)
         agent.decrease_epsilon()
         LOGGER.info('Balance for current game: %d', environment.deposit)
 
