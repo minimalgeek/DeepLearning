@@ -42,7 +42,7 @@ class Environment:
         days_to_holds = np.arange(min_days_to_hold,
                                   max_days_to_hold + 1)
 
-        self.action_space = [Action(ticker, act, days, 3)
+        self.action_space = [Action(ticker, act, days, 5)
                              for act in Action.acts
                              for days in days_to_holds
                              for ticker in ticker_list]

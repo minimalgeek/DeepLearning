@@ -31,7 +31,7 @@ class Agent:
         self.batch_size = batch_size
         self.layer_decrease_multiplier = layer_decrease_multiplier
         self.min_epsilon = min_epsilon
-        self.gamma = gamma # how much should we look into the future predicitons
+        self.gamma = gamma  # how much should we look into the future predicitons
 
         self.epsilon = 1
         self.memory_buffer = memory_buffer
@@ -41,7 +41,9 @@ class Agent:
         self._build_model()
 
     def _build_model(self):
-        first_layer_size = int(self.input_shape[0] * self.layer_decrease_multiplier)
+        first_layer_size = int(self.input_shape[0] *
+                               self.input_shape[1] *
+                               self.layer_decrease_multiplier)
         second_layer_size = int(first_layer_size * self.layer_decrease_multiplier)
         third_layer_size = int(second_layer_size * self.layer_decrease_multiplier)
 
