@@ -73,6 +73,7 @@ class Agent:
     def decrease_epsilon(self):
         if self.epsilon > self.min_epsilon:
             self.epsilon -= (1 / self.epochs)
+        LOGGER.info('New epsilon is %d', self.epsilon)
 
     def act(self, state):
         if random.random() < self.epsilon:  # choose random action
