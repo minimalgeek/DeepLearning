@@ -20,10 +20,11 @@ class Agent:
                  epochs,
                  batch_size=8,
                  layer_decrease_multiplier=0.8,
-                 min_epsilon=0.1,
-                 gamma=0.2,
-                 memory_buffer=32,
-                 memory_queue_buffer=128):
+                 min_epsilon=0.05,
+                 gamma=0.05,
+                 replay_buffer=32,
+                 memory_queue_length=128,
+                 learning_rate=0.01):
         self.input_shape = input_shape
         self.action_size = action_size
         self.epochs = epochs
@@ -34,8 +35,9 @@ class Agent:
         self.gamma = gamma  # how much should we look into the future predicitons
 
         self.epsilon = 1
-        self.memory_buffer = memory_buffer
-        self.memory = deque(maxlen=memory_queue_buffer)
+        self.replay_buffer = replay_buffer
+        self.memory = deque(maxlen=memory_queue_length)
+        self.learning_rate = learning_rate
         self.replay_index = 0
 
         self._build_model()
@@ -50,20 +52,20 @@ class Agent:
         model.add(Dense(first_layer_size, input_shape=self.input_shape))
         model.add(Flatten())
         model.add(Activation('relu'))
-        model.add(Dropout(0.2))
+        model.add(Dropout(0.1))
 
         model.add(Dense(second_layer_size))
         model.add(Activation('relu'))
-        model.add(Dropout(0.2))
+        model.add(Dropout(0.1))
 
         model.add(Dense(third_layer_size))
         model.add(Activation('relu'))
-        model.add(Dropout(0.2))
+        model.add(Dropout(0.1))
 
         model.add(Dense(self.action_size))
         model.add(Activation('linear'))  # linear output so we can have range of real-valued outputs
 
-        adam = Adam()
+        adam = Adam(lr=self.learning_rate)
         model.compile(loss=mean_squared_error, optimizer=adam)
         LOGGER.info('Model successfully built with hidden layers: {}, {}, {}'
                     .format(first_layer_size,
@@ -87,13 +89,15 @@ class Agent:
     def remember(self, state, action, reward, next_state, done):
         action_tuple = (state, action, reward, next_state, done)
         self.memory.append(action_tuple)
-        if len(self.memory) >= self.memory_buffer:
+        self.replay_index += 1
+        if self.replay_index >= self.replay_buffer:
             self.replay()
+            self.replay_index = 0
             # state = new_state ???
 
     def replay(self):
         # randomly sample our experience replay memory
-        mini_batch = random.sample(self.memory, self.memory_buffer)
+        mini_batch = random.sample(self.memory, self.replay_buffer)
         LOGGER.info('Experience replay for {} memories'.format(len(mini_batch)))
         x_train = []
         y_train = []
@@ -106,23 +110,20 @@ class Agent:
             old_q = self.model.predict(state_vals, batch_size=1)
             new_q = self.model.predict(next_state_vals, batch_size=1)
             max_q = np.max(new_q)
-            y = np.zeros((1, self.action_size))
-            y[:] = old_q[:]
+            update = reward
             if not done:
-                update = (reward + (self.gamma * max_q))
-            else:
-                update = reward
-            y[0][action] = update
+                update += self.gamma * max_q
+            old_q[0][action] = update
             x_train.append(state.values)
-            y_train.append(y[0])
+            y_train.append(old_q[0])
 
         x_train = np.array(x_train)  # (32, 50, 15)
         y_train = np.array(y_train)  # (32, 90)
         self.model.fit(x_train,
                        y_train,
                        batch_size=self.batch_size,
-                       epochs=1,
-                       verbose=1)
+                       epochs=self.replay_buffer,  # TODO: decide about this, originally it was 1
+                       verbose=0)
 
     def load(self, name):
         LOGGER.info("Load '%s' model", name)

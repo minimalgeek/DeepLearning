@@ -1,28 +1,25 @@
 import logging
 from pprint import pprint
+from datetime import datetime
 
 from .agent import Agent
 from .environment import Environment
 
-AAPL_IBM_GOOG = 'aapl-ibm-goog.h5'
+WEIGHTS_FILE = 'aapl.h5'
 
 LOGGER = logging.getLogger(__name__)
 
-epochs = 50  # number of games
+epochs = 10  # number of games
 
 
 def main(train):
-    environment = Environment(['AAPL', 'IBM', 'GOOG'],
-                              initial_deposit=1000,
-                              min_days_to_hold=2,
-                              max_days_to_hold=5)
+    environment = Environment(['AAPL'],  # 'AAPL', 'IBM', 'GOOG'
+                              from_date=datetime(2007,1,1),
+                              to_date=datetime(2013,1,1))
     agent = Agent(environment.state_size(),
                   environment.action_size(),
                   epochs=epochs,
-                  layer_decrease_multiplier=0.7,
-                  batch_size=16,
-                  memory_queue_buffer=256,
-                  gamma=0.1)
+                  memory_queue_length=256)
 
     if train:
         for i in range(epochs):
@@ -38,20 +35,25 @@ def main(train):
             LOGGER.info('Balance for current game: %d', environment.deposit)
 
         pprint(environment.actions)
-        agent.save(AAPL_IBM_GOOG)
+        agent.save(WEIGHTS_FILE)
     else:
-        agent.load(AAPL_IBM_GOOG)
+        agent.load(WEIGHTS_FILE)
 
     # Test on!
-    state = environment.switch_to_test_data()
+    test_environment = Environment(['AAPL'],  # 'AAPL', 'IBM', 'GOOG'
+                                   from_date=datetime(2013, 1, 1),
+                                   to_date=datetime(2017, 1, 1),
+                                   scaler=environment.scaler)
+    state = test_environment.reset()
     done = False
 
     while not done:
         action = agent.act(state, False)
-        next_state, reward, done = environment.step(action)
+        next_state, reward, done = test_environment.step(action)
         state = next_state
-    LOGGER.info('Balance for current game: %d', environment.deposit)
-    pprint(environment.actions)
+    LOGGER.info('Balance for current game: %d', test_environment.deposit)
+    pprint(test_environment.actions)
+
 
 if __name__ == '__main__':
     main(train=True)
