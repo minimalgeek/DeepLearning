@@ -4,7 +4,7 @@ class Action:
     SELL = 'sell'
     SKIP = 'skip'
 
-    acts = [BUY, SELL, SKIP]
+    acts = [BUY, SELL]
 
     def __init__(self, ticker, act, days, percentage):
         self.ticker = ticker

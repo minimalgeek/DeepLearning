@@ -9,7 +9,7 @@ WEIGHTS_FILE = 'aapl.h5'
 
 LOGGER = logging.getLogger(__name__)
 
-epochs = 10  # number of games
+epochs = 30  # number of games
 
 
 def main(train):

@@ -22,7 +22,7 @@ class Environment:
                  to_date=datetime.datetime(2017, 1, 1),
                  window=50,
                  min_days_to_hold=2,
-                 max_days_to_hold=7,
+                 max_days_to_hold=5,
                  scaler=None):
         self.initial_deposit = initial_deposit
         self.window = window
@@ -57,9 +57,11 @@ class Environment:
         LOGGER.info('Data size: %d' % rows)
 
         if self.scaler is None:
+            LOGGER.info('Create new scaler')
             self.scaler = StandardScaler()
             data_unstacked_scaled = self.scaler.fit_transform(data_unstacked)
         else:
+            LOGGER.info('Use existing scaler')
             data_unstacked_scaled = self.scaler.transform(data_unstacked)
         self.scaled_data = pd.DataFrame(data=data_unstacked_scaled, columns=data_unstacked.columns, index=data_unstacked.index)
 
@@ -82,11 +84,10 @@ class Environment:
             reward = (last_day_price - first_day_price)/first_day_price
         elif action.act == Action.SELL:
             reward = (first_day_price - last_day_price)/first_day_price
-        elif action.act == Action.SKIP:
-            # let's say it's better not to spend money, instead of losing it
+        else:
             reward = 0  # math.fabs(last_day_price - first_day_price) * Environment.SKIP_REWARD_MULTIPLIER
 
-        self.current_index += action.days
+        self.current_index += 1# action.days
 
         # store information for further inspectation
         self.deposit += reward * (self.deposit * action.percentage / 100)
