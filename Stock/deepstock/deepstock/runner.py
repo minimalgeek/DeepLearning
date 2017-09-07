@@ -21,7 +21,7 @@ def main(train):
     agent = Agent(environment.state_size(),
                   environment.action_size(),
                   epochs=epochs,
-                  memory_queue_length=256)
+                  memory_queue_length=64)
 
     if train:
         for i in range(epochs):

@@ -5,8 +5,9 @@ import logging
 import random
 
 from keras.models import Sequential
-from keras.layers.convolutional import Conv2D, MaxPooling2D
+from keras.layers.convolutional import Conv1D, MaxPooling1D
 from keras.layers.core import Dense, Dropout, Activation, Flatten
+from keras.constraints import maxnorm
 from keras.optimizers import Adam
 from keras.losses import mean_squared_error
 
@@ -22,7 +23,7 @@ class Agent:
                  min_epsilon=0.05,
                  gamma=0.05,
                  replay_buffer=32,
-                 memory_queue_length=128,
+                 memory_queue_length=64,
                  learning_rate=0.01):
         self.input_shape = input_shape
         self.action_size = action_size
@@ -34,7 +35,9 @@ class Agent:
 
         self.epsilon = 1
         self.replay_buffer = replay_buffer
-        self.memory = deque(maxlen=memory_queue_length)
+        self.memory = {}
+        for i in range(action_size):
+            self.memory[i] = deque(maxlen=memory_queue_length)
         self.learning_rate = learning_rate
         self.replay_index = 0
 
@@ -47,8 +50,22 @@ class Agent:
         third_layer_size = int(second_layer_size * self.layer_decrease_multiplier)
 
         model = Sequential()
-        model.add(Dense(first_layer_size, input_shape=self.input_shape))
+
+        model.add(Conv1D(32, 3,
+                         input_shape=self.input_shape,
+                         padding='same',
+                         activation='relu',
+                         kernel_constraint=maxnorm(3)))
+        model.add(Dropout(0.2))
+        model.add(Conv1D(32, 3,
+                         padding='same',
+                         activation='relu',
+                         kernel_constraint=maxnorm(3)))
+        # model.add(MaxPooling1D(pool_size=3))
         model.add(Flatten())
+
+        model.add(Dense(first_layer_size))
+        # model.add(Flatten())
         model.add(Activation('relu'))
         model.add(Dropout(0.1))
 
@@ -63,8 +80,9 @@ class Agent:
         model.add(Dense(self.action_size))
         model.add(Activation('linear'))
 
-        adam = Adam(lr=self.learning_rate)
-        model.compile(loss=mean_squared_error, optimizer=adam)
+        model.compile(loss=mean_squared_error,
+                      optimizer=Adam(lr=self.learning_rate),
+                      metrics=['accuracy'])
         LOGGER.info('Model successfully built with hidden layers: {}, {}, {}'
                     .format(first_layer_size,
                             second_layer_size,
@@ -87,7 +105,7 @@ class Agent:
 
     def remember(self, state, action, reward, next_state, done):
         action_tuple = (state, action, reward, next_state, done)
-        self.memory.append(action_tuple)
+        self.memory[action].append(action_tuple)
         self.replay_index += 1
         if self.replay_index >= self.replay_buffer:
             self.replay()
@@ -96,7 +114,8 @@ class Agent:
 
     def replay(self):
         # randomly sample our experience replay memory
-        mini_batch = random.sample(self.memory, self.replay_buffer)
+        flat_list = [item for sublist in self.memory.values() for item in sublist]
+        mini_batch = random.sample(flat_list, self.replay_buffer)
         LOGGER.info('Experience replay for {} memories'.format(len(mini_batch)))
         x_train = []
         y_train = []
