@@ -1,11 +1,11 @@
 from collections import deque
 
 import numpy as np
-import pandas as pd
 import logging
 import random
 
 from keras.models import Sequential
+from keras.layers.convolutional import Conv2D, MaxPooling2D
 from keras.layers.core import Dense, Dropout, Activation, Flatten
 from keras.optimizers import Adam
 from keras.losses import mean_squared_error
@@ -18,7 +18,6 @@ class Agent:
                  input_shape,
                  action_size,
                  epochs,
-                 batch_size=8,
                  layer_decrease_multiplier=0.8,
                  min_epsilon=0.05,
                  gamma=0.05,
@@ -29,7 +28,6 @@ class Agent:
         self.action_size = action_size
         self.epochs = epochs
 
-        self.batch_size = batch_size
         self.layer_decrease_multiplier = layer_decrease_multiplier
         self.min_epsilon = min_epsilon
         self.gamma = gamma  # how much should we look into the future predicitons
@@ -63,7 +61,7 @@ class Agent:
         model.add(Dropout(0.1))
 
         model.add(Dense(self.action_size))
-        model.add(Activation('linear'))  # linear output so we can have range of real-valued outputs
+        model.add(Activation('linear'))
 
         adam = Adam(lr=self.learning_rate)
         model.compile(loss=mean_squared_error, optimizer=adam)
@@ -83,7 +81,8 @@ class Agent:
             action = np.random.randint(0, self.action_size)
         else:  # choose best action from Q(s,a) values
             q_val = self.model.predict(Agent.df_to_array(state), batch_size=1)
-            action = np.argmax(q_val)
+            action = np.argmax(q_val[0])
+            LOGGER.info('\t\tChoosen action index: {}'.format(action))
         return action
 
     def remember(self, state, action, reward, next_state, done):
@@ -121,8 +120,7 @@ class Agent:
         y_train = np.array(y_train)  # (32, 90)
         self.model.fit(x_train,
                        y_train,
-                       batch_size=self.batch_size,
-                       epochs=self.replay_buffer,  # TODO: decide about this, originally it was 1
+                       epochs=1,  # self.replay_buffer
                        verbose=0)
 
     def load(self, name):

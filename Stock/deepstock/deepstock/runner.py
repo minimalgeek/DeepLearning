@@ -9,13 +9,15 @@ WEIGHTS_FILE = 'aapl.h5'
 
 LOGGER = logging.getLogger(__name__)
 
-epochs = 30  # number of games
+epochs = 50  # number of games
 
 
 def main(train):
-    environment = Environment(['AAPL'],  # 'AAPL', 'IBM', 'GOOG'
-                              from_date=datetime(2007,1,1),
-                              to_date=datetime(2013,1,1))
+    environment = Environment(['AAPL', 'IBM', 'GOOG'],  #
+                              from_date=datetime(2007, 1, 1),
+                              to_date=datetime(2013, 1, 1),
+                              min_days_to_hold=2,
+                              max_days_to_hold=5)
     agent = Agent(environment.state_size(),
                   environment.action_size(),
                   epochs=epochs,
@@ -40,10 +42,13 @@ def main(train):
         agent.load(WEIGHTS_FILE)
 
     # Test on!
-    test_environment = Environment(['AAPL'],  # 'AAPL', 'IBM', 'GOOG'
+    test_environment = Environment(['AAPL', 'IBM', 'GOOG'],  # 'AAPL', 'IBM', 'GOOG'
                                    from_date=datetime(2013, 1, 1),
                                    to_date=datetime(2017, 1, 1),
+                                   min_days_to_hold=2,
+                                   max_days_to_hold=5,
                                    scaler=environment.scaler)
+
     state = test_environment.reset()
     done = False
 
@@ -53,7 +58,6 @@ def main(train):
         state = next_state
     LOGGER.info('Balance for current game: %d', test_environment.deposit)
     pprint(test_environment.actions)
-
 
 if __name__ == '__main__':
     main(train=True)

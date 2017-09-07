@@ -3,7 +3,6 @@ import pandas as pd
 import pandas_datareader as pdr
 import datetime
 import logging
-import math
 from sklearn.preprocessing import StandardScaler
 
 from .action import Action
@@ -96,7 +95,7 @@ class Environment:
         next_state = self.state()
         done = self.deposit < self.minimal_deposit or \
                self.max_current_index < self.current_index
-        return next_state, reward, done
+        return next_state, reward*100, done
 
     def future_data_for_action(self, action: Action):
         return self.data.loc[action.ticker].iloc[self.current_index - 1: self.current_index - 1 + action.days]
