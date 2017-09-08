@@ -5,7 +5,7 @@ from datetime import datetime
 from .agent import Agent
 from .environment import Environment
 
-WEIGHTS_FILE = 'aapl.h5'
+WEIGHTS_FILE = 'model.h5'
 
 LOGGER = logging.getLogger(__name__)
 
@@ -16,12 +16,14 @@ def main(train):
     environment = Environment(['AAPL', 'IBM', 'GOOG'],  #
                               from_date=datetime(2007, 1, 1),
                               to_date=datetime(2013, 1, 1),
-                              min_days_to_hold=2,
+                              min_days_to_hold=5,
                               max_days_to_hold=5)
     agent = Agent(environment.state_size(),
                   environment.action_size(),
                   epochs=epochs,
-                  memory_queue_length=64)
+                  replay_buffer=64,
+                  memory_queue_length=32,
+                  gamma=0.1)  # the future trade has max influence
 
     if train:
         for i in range(epochs):
@@ -45,7 +47,7 @@ def main(train):
     test_environment = Environment(['AAPL', 'IBM', 'GOOG'],  # 'AAPL', 'IBM', 'GOOG'
                                    from_date=datetime(2013, 1, 1),
                                    to_date=datetime(2017, 1, 1),
-                                   min_days_to_hold=2,
+                                   min_days_to_hold=5,
                                    max_days_to_hold=5,
                                    scaler=environment.scaler)
 
@@ -54,10 +56,11 @@ def main(train):
 
     while not done:
         action = agent.act(state, False)
-        next_state, reward, done = test_environment.step(action)
+        next_state, _, done = test_environment.step(action)
         state = next_state
     LOGGER.info('Balance for current game: %d', test_environment.deposit)
     pprint(test_environment.actions)
+
 
 if __name__ == '__main__':
     main(train=True)

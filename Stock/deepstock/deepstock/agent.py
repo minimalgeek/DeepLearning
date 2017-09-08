@@ -21,10 +21,9 @@ class Agent:
                  epochs,
                  layer_decrease_multiplier=0.8,
                  min_epsilon=0.05,
-                 gamma=0.05,
+                 gamma=0.1,
                  replay_buffer=32,
-                 memory_queue_length=64,
-                 learning_rate=0.01):
+                 memory_queue_length=64):
         self.input_shape = input_shape
         self.action_size = action_size
         self.epochs = epochs
@@ -38,7 +37,6 @@ class Agent:
         self.memory = {}
         for i in range(action_size):
             self.memory[i] = deque(maxlen=memory_queue_length)
-        self.learning_rate = learning_rate
         self.replay_index = 0
 
         self._build_model()
@@ -51,21 +49,24 @@ class Agent:
 
         model = Sequential()
 
-        model.add(Conv1D(32, 3,
-                         input_shape=self.input_shape,
-                         padding='same',
-                         activation='relu',
-                         kernel_constraint=maxnorm(3)))
-        model.add(Dropout(0.2))
-        model.add(Conv1D(32, 3,
-                         padding='same',
-                         activation='relu',
-                         kernel_constraint=maxnorm(3)))
+        # CNN layers
+        # model.add(Conv1D(32, 3,
+        #                  input_shape=self.input_shape,
+        #                  padding='same',
+        #                  activation='relu',
+        #                  kernel_constraint=maxnorm(3)))
+        # model.add(Dropout(0.2))
+        # model.add(Conv1D(32, 3,
+        #                  padding='same',
+        #                  activation='relu',
+        #                  kernel_constraint=maxnorm(3)))
         # model.add(MaxPooling1D(pool_size=3))
-        model.add(Flatten())
-
-        model.add(Dense(first_layer_size))
         # model.add(Flatten())
+        # model.add(Dense(first_layer_size))
+
+        # DNN layers
+        model.add(Dense(first_layer_size, input_shape=self.input_shape))
+        model.add(Flatten())
         model.add(Activation('relu'))
         model.add(Dropout(0.1))
 
@@ -81,7 +82,7 @@ class Agent:
         model.add(Activation('linear'))
 
         model.compile(loss=mean_squared_error,
-                      optimizer=Adam(lr=self.learning_rate),
+                      optimizer=Adam(),
                       metrics=['accuracy'])
         LOGGER.info('Model successfully built with hidden layers: {}, {}, {}'
                     .format(first_layer_size,
@@ -117,6 +118,8 @@ class Agent:
         flat_list = [item for sublist in self.memory.values() for item in sublist]
         mini_batch = random.sample(flat_list, self.replay_buffer)
         LOGGER.info('Experience replay for {} memories'.format(len(mini_batch)))
+        # LOGGER.info('Action pool: {}'.format([mem[1] for mem in mini_batch]))
+
         x_train = []
         y_train = []
         for mem in mini_batch:
@@ -131,7 +134,7 @@ class Agent:
             update = reward
             if not done:
                 update += self.gamma * max_q
-            old_q[0][action] = update
+            old_q[0][action] = update * 1000
             x_train.append(state.values)
             y_train.append(old_q[0])
 
@@ -139,7 +142,8 @@ class Agent:
         y_train = np.array(y_train)  # (32, 90)
         self.model.fit(x_train,
                        y_train,
-                       epochs=1,  # self.replay_buffer
+                       batch_size=self.replay_buffer,
+                       epochs=8,
                        verbose=0)
 
     def load(self, name):

@@ -3,6 +3,7 @@ import pandas as pd
 import pandas_datareader as pdr
 import datetime
 import logging
+import random
 from sklearn.preprocessing import StandardScaler
 
 from .action import Action
@@ -11,7 +12,6 @@ LOGGER = logging.getLogger(__name__)
 
 
 class Environment:
-
     MIN_DEPOSIT_PCT = 0.7
 
     def __init__(self,
@@ -62,13 +62,16 @@ class Environment:
         else:
             LOGGER.info('Use existing scaler')
             data_unstacked_scaled = self.scaler.transform(data_unstacked)
-        self.scaled_data = pd.DataFrame(data=data_unstacked_scaled, columns=data_unstacked.columns, index=data_unstacked.index)
+        self.scaled_data = pd.DataFrame(data=data_unstacked_scaled, columns=data_unstacked.columns,
+                                        index=data_unstacked.index)
 
     def reset(self):
         self.deposit = self.initial_deposit
+        self.max_current_index = len(self.scaled_data) - self.max_days_to_hold
+        self.current_index_pool = np.arange(self.window, self.max_current_index).tolist()
+        random.shuffle(self.current_index_pool)
         self.current_index = self.window
         self.actions = {}
-        self.max_current_index = len(self.scaled_data) - self.max_days_to_hold
         return self.state()
 
     def step(self, action_idx: int):
@@ -80,22 +83,23 @@ class Environment:
         last_day_price = covered_df.iloc[-1]['Close']
 
         if action.act == Action.BUY:
-            reward = (last_day_price - first_day_price)/first_day_price
+            reward = (last_day_price - first_day_price) / first_day_price
         elif action.act == Action.SELL:
-            reward = (first_day_price - last_day_price)/first_day_price
+            reward = (first_day_price - last_day_price) / first_day_price
         else:
             reward = 0  # math.fabs(last_day_price - first_day_price) * Environment.SKIP_REWARD_MULTIPLIER
 
-        self.current_index += 1# action.days
+        # self.current_index += 1# action.days
+        self.current_index = self.current_index_pool.pop()
 
         # store information for further inspectation
         self.deposit += reward * (self.deposit * action.percentage / 100)
         self.actions[on_date] = (action, reward)
 
         next_state = self.state()
-        done = self.deposit < self.minimal_deposit or \
-               self.max_current_index < self.current_index
-        return next_state, reward*100, done
+        done = self.deposit < self.minimal_deposit or len(self.current_index_pool) == 0
+        # self.max_current_index < self.current_index
+        return next_state, reward, done
 
     def future_data_for_action(self, action: Action):
         return self.data.loc[action.ticker].iloc[self.current_index - 1: self.current_index - 1 + action.days]
