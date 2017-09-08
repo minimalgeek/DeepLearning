@@ -10,20 +10,23 @@ WEIGHTS_FILE = 'model.h5'
 LOGGER = logging.getLogger(__name__)
 
 epochs = 500  # number of games
+tickers = ['AAPL', 'GOOG', 'NVDA', 'INTC']
+min_days_to_hold = 5
+max_days_to_hold = 5
 
 
 def main(train):
-    environment = Environment(['AAPL', 'GOOG'],  #
+    environment = Environment(tickers,
                               from_date=datetime(2007, 1, 1),
                               to_date=datetime(2013, 1, 1),
-                              min_days_to_hold=2,
-                              max_days_to_hold=5)
+                              min_days_to_hold=min_days_to_hold,
+                              max_days_to_hold=max_days_to_hold)
     agent = Agent(environment.state_size(),
                   environment.action_size(),
                   epochs=epochs,
                   replay_buffer=64,
-                  memory_queue_length=32,
-                  gamma=0)  # the future trade has zero influence
+                  memory_queue_length=64,
+                  gamma=0.05)  # the future trade has ~zero influence
 
     if train:
         for i in range(epochs):
@@ -44,11 +47,11 @@ def main(train):
         agent.load(WEIGHTS_FILE)
 
     # Test on!
-    test_environment = Environment(['AAPL', 'GOOG'],  # 'AAPL', 'IBM', 'GOOG'
+    test_environment = Environment(tickers,
                                    from_date=datetime(2013, 1, 1),
                                    to_date=datetime(2017, 1, 1),
-                                   min_days_to_hold=2,
-                                   max_days_to_hold=5,
+                                   min_days_to_hold=min_days_to_hold,
+                                   max_days_to_hold=max_days_to_hold,
                                    scaler=environment.scaler)
 
     state = test_environment.reset()

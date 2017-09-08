@@ -49,26 +49,28 @@ class Agent:
 
         model = Sequential()
 
-        # CNN layers
+        # # CNN layers
         # model.add(Conv1D(32, 3,
         #                  input_shape=self.input_shape,
         #                  padding='same',
-        #                  activation='relu',
-        #                  kernel_constraint=maxnorm(3)))
-        # model.add(Dropout(0.2))
+        #                  activation='relu'))  # kernel_constraint=maxnorm(3)
+        # model.add(Dropout(0.1))
         # model.add(Conv1D(32, 3,
         #                  padding='same',
-        #                  activation='relu',
-        #                  kernel_constraint=maxnorm(3)))
-        # model.add(MaxPooling1D(pool_size=3))
+        #                  activation='relu'))
+        # # model.add(MaxPooling1D(pool_size=3))
         # model.add(Flatten())
         # model.add(Dense(first_layer_size))
+        # model.add(Activation('relu'))
+        # model.add(Dropout(0.1))
+        # # CNN end
 
         # DNN layers
         model.add(Dense(first_layer_size, input_shape=self.input_shape))
         model.add(Flatten())
         model.add(Activation('relu'))
         model.add(Dropout(0.1))
+        # DNN end
 
         model.add(Dense(second_layer_size))
         model.add(Activation('relu'))
@@ -131,10 +133,10 @@ class Agent:
             old_q = self.model.predict(state_vals, batch_size=1)
             new_q = self.model.predict(next_state_vals, batch_size=1)
             max_q = np.max(new_q)
-            update = reward
+            update = 1 if reward > 0 else -1  # originally: reward
             if not done:
                 update += self.gamma * max_q
-            old_q[0][action] = update * 1000
+            old_q[0][action] = update
             x_train.append(state.values)
             y_train.append(old_q[0])
 
