@@ -18,7 +18,7 @@ class Agent:
     def __init__(self,
                  input_shape,
                  action_size,
-                 epochs,
+                 epochs=0,
                  layer_decrease_multiplier=0.8,
                  min_epsilon=0.05,
                  gamma=0.1,

@@ -20,7 +20,7 @@ class Environment:
                  from_date=datetime.datetime(2007, 1, 1),
                  to_date=datetime.datetime(2017, 1, 1),
                  window=50,
-                 min_days_to_hold=2,
+                 min_days_to_hold=5,
                  max_days_to_hold=5,
                  scaler=None):
         self.initial_deposit = initial_deposit
