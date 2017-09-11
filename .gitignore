@@ -53,6 +53,9 @@ coverage.xml
 *.log
 local_settings.py
 
+# Other logs
+*.log.*
+
 # Flask instance folder
 instance/
 
