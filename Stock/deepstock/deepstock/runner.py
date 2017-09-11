@@ -9,9 +9,9 @@ WEIGHTS_FILE = 'model.h5'
 
 LOGGER = logging.getLogger(__name__)
 
-epochs = 1000  # number of games
+epochs = 100  # number of games
 tickers = ['AAPL', 'NVDA', 'GOOG', 'INTC']
-min_days_to_hold = 2
+min_days_to_hold = 5
 max_days_to_hold = 5
 
 
