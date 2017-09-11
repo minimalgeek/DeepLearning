@@ -39,10 +39,9 @@ class Environment:
         days_to_holds = np.arange(min_days_to_hold,
                                   max_days_to_hold + 1)
 
-        self.action_space = [Action(ticker, act, days, 10)
+        self.action_space = [Action(ticker_list[0], act, days, 10)
                              for act in Action.acts
-                             for days in days_to_holds
-                             for ticker in ticker_list]
+                             for days in days_to_holds]  # for ticker in ticker_list
         self.minimal_deposit = self.initial_deposit * Environment.MIN_DEPOSIT_PCT
         self.scaler = scaler
         self.preprocess_data()
@@ -68,8 +67,8 @@ class Environment:
     def reset(self):
         self.deposit = self.initial_deposit
         self.max_current_index = len(self.scaled_data) - self.max_days_to_hold
-        self.current_index_pool = np.arange(self.window, self.max_current_index).tolist()
-        random.shuffle(self.current_index_pool)
+        # self.current_index_pool = np.arange(self.window, self.max_current_index).tolist()
+        # random.shuffle(self.current_index_pool)
         self.current_index = self.window
         self.actions = {}
         return self.state()
@@ -89,16 +88,17 @@ class Environment:
         else:
             reward = 0  # math.fabs(last_day_price - first_day_price) * Environment.SKIP_REWARD_MULTIPLIER
 
-        # self.current_index += 1# action.days
-        self.current_index = self.current_index_pool.pop()
+        self.current_index += 1  # action.days
+        # self.current_index = self.current_index_pool.pop()
 
         # store information for further inspectation
         self.deposit += reward * (self.deposit * action.percentage / 100)
         self.actions[on_date] = (action, reward)
 
         next_state = self.state()
-        done = self.deposit < self.minimal_deposit or len(self.current_index_pool) == 0
-        # self.max_current_index < self.current_index
+        done = self.deposit < self.minimal_deposit or \
+               self.max_current_index < self.current_index
+        # or len(self.current_index_pool) == 0
         return next_state, reward, done
 
     def future_data_for_action(self, action: Action):

@@ -133,7 +133,7 @@ class Agent:
             old_q = self.model.predict(state_vals, batch_size=1)
             new_q = self.model.predict(next_state_vals, batch_size=1)
             max_q = np.max(new_q)
-            update = 1 if reward > 0 else -1  # originally: reward
+            update = reward * 100  # 1 if reward > 0 else -1
             if not done:
                 update += self.gamma * max_q
             old_q[0][action] = update

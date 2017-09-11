@@ -9,9 +9,9 @@ WEIGHTS_FILE = 'model.h5'
 
 LOGGER = logging.getLogger(__name__)
 
-epochs = 500  # number of games
-tickers = ['AAPL', 'GOOG', 'NVDA', 'INTC']
-min_days_to_hold = 5
+epochs = 1000  # number of games
+tickers = ['AAPL', 'NVDA', 'GOOG', 'INTC']
+min_days_to_hold = 2
 max_days_to_hold = 5
 
 
@@ -26,7 +26,7 @@ def main(train):
                   epochs=epochs,
                   replay_buffer=64,
                   memory_queue_length=64,
-                  gamma=0.05)  # the future trade has ~zero influence
+                  gamma=0.2)  # the future trade has ~zero influence
 
     if train:
         for i in range(epochs):
