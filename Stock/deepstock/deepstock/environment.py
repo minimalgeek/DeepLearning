@@ -92,8 +92,10 @@ class Environment:
         # self.current_index = self.current_index_pool.pop()
 
         # store information for further inspectation
-        self.deposit += reward * (self.deposit * action.percentage / 100)
-        self.actions[on_date] = (action, reward)
+        invested_amount = self.deposit * action.percentage / 100
+        deposit_reward = reward * invested_amount
+        self.deposit += deposit_reward
+        self.actions[on_date] = (action, reward, deposit_reward, first_day_price, last_day_price, invested_amount)
 
         next_state = self.state()
         done = self.deposit < self.minimal_deposit or \
