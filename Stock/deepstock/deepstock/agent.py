@@ -5,11 +5,9 @@ import logging
 import random
 
 from keras.models import Sequential
-from keras.layers.convolutional import Conv1D, MaxPooling1D
 from keras.layers.core import Dense, Dropout, Activation, Flatten
-from keras.constraints import maxnorm
 from keras.optimizers import Adam
-from keras.losses import mean_squared_error
+from keras.losses import categorical_crossentropy
 
 LOGGER = logging.getLogger(__name__)
 
@@ -81,9 +79,9 @@ class Agent:
         model.add(Dropout(0.1))
 
         model.add(Dense(self.action_size))
-        model.add(Activation('linear'))
+        model.add(Activation('softmax'))
 
-        model.compile(loss=mean_squared_error,
+        model.compile(loss=categorical_crossentropy,
                       optimizer=Adam(),
                       metrics=['accuracy'])
         LOGGER.info('Model successfully built with hidden layers: {}, {}, {}'

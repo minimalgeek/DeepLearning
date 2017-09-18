@@ -62,7 +62,7 @@ def main(train):
     done = False
 
     while not done:
-        action = agent.act(state, False, 6)
+        action = agent.act(state, False, 0.99)
         next_state, _, done = test_environment.step(action)
         state = next_state
     LOGGER.info('Balance for current game: %d', test_environment.deposit)
@@ -81,4 +81,4 @@ def export_to_file(actions: dict):
 
 
 if __name__ == '__main__':
-    main(train=False)
+    main(train=True)
