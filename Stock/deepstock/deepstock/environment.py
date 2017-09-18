@@ -47,11 +47,13 @@ class Environment:
             return pd.concat(datas, keys=tickers, names=['Ticker', 'Date'])
 
         self.data = get(ticker_list, from_date, to_date)
+        self.data.drop('Volume', inplace=True, axis=1)
 
         days_to_holds = np.arange(min_days_to_hold,
                                   max_days_to_hold + 1)
 
-        self.action_space = [Action(ticker_list[0], act, days, 10)
+        self.main_ticker = ticker_list[0]
+        self.action_space = [Action(self.main_ticker, act, days, 10)
                              for act in Action.acts
                              for days in days_to_holds]  # for ticker in ticker_list
         self.minimal_deposit = self.initial_deposit * Environment.MIN_DEPOSIT_PCT
@@ -87,7 +89,7 @@ class Environment:
 
     def step(self, action_idx: int):
         if action_idx == -1:
-            LOGGER.info('Skip action for {}'.format(self.data.loc['AAPL'].iloc[self.current_index - 1].name))
+            LOGGER.info('Skip action for {}'.format(self.data.loc[self.main_ticker].iloc[self.current_index - 1].name))
             self.current_index += 1
             next_state = self.state()
             return next_state, None, (self.max_current_index < self.current_index)
