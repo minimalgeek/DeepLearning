@@ -28,8 +28,8 @@ def main(train):
                   environment.action_size(),
                   epochs=epochs,
                   replay_buffer=128,
-                  memory_queue_length=64,
-                  gamma=0.2)  # the future trade has ~zero influence
+                  memory_queue_length=128,
+                  gamma=0.5)
 
     if train:
         for i in range(epochs):
@@ -62,7 +62,7 @@ def main(train):
     done = False
 
     while not done:
-        action = agent.act(state, False)
+        action = agent.act(state, False, 2)
         next_state, _, done = test_environment.step(action)
         state = next_state
     LOGGER.info('Balance for current game: %d', test_environment.deposit)
@@ -81,4 +81,4 @@ def export_to_file(actions: dict):
 
 
 if __name__ == '__main__':
-    main(train=False)
+    main(train=True)

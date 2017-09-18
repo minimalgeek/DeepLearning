@@ -3,10 +3,22 @@ import pandas as pd
 import pandas_datareader as pdr
 import datetime
 import logging
-import random
+
 from sklearn.preprocessing import StandardScaler
 
 from .action import Action
+
+####################################
+# TODO: remove this after API update
+from pandas_datareader.google.daily import GoogleDailyReader
+
+@property
+def url(self):
+    return 'http://finance.google.com/finance/historical'
+
+GoogleDailyReader.url = url
+# remove ends
+####################################
 
 LOGGER = logging.getLogger(__name__)
 
@@ -74,6 +86,12 @@ class Environment:
         return self.state()
 
     def step(self, action_idx: int):
+        if action_idx == -1:
+            LOGGER.info('Skip action for {}'.format(self.data.loc['AAPL'].iloc[self.current_index - 1].name))
+            self.current_index += 1
+            next_state = self.state()
+            return next_state, None, (self.max_current_index < self.current_index)
+
         action = self.action_space[action_idx]
 
         covered_df = self.future_data_for_action(action)
@@ -104,7 +122,8 @@ class Environment:
         return next_state, reward, done
 
     def future_data_for_action(self, action: Action):
-        return self.data.loc[action.ticker].iloc[self.current_index - 1: self.current_index - 1 + action.days]
+        trade_day_index = self.current_index - 1
+        return self.data.loc[action.ticker].iloc[trade_day_index: trade_day_index + action.days]
 
     def state(self):
         return self.scaled_data.iloc[self.current_index - self.window: self.current_index]
