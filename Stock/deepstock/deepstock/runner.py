@@ -27,9 +27,9 @@ def main(train):
     agent = Agent(environment.state_size(),
                   environment.action_size(),
                   epochs=epochs,
-                  replay_buffer=128,
-                  memory_queue_length=128,
-                  gamma=0.5)
+                  replay_buffer=64,
+                  memory_queue_length=64,
+                  gamma=0.9)
 
     if train:
         for i in range(epochs):
@@ -62,7 +62,7 @@ def main(train):
     done = False
 
     while not done:
-        action = agent.act(state, False, 0.99)
+        action = agent.act(state, False, 0.99995)
         next_state, _, done = test_environment.step(action)
         state = next_state
     LOGGER.info('Balance for current game: %d', test_environment.deposit)
@@ -81,4 +81,4 @@ def export_to_file(actions: dict):
 
 
 if __name__ == '__main__':
-    main(train=True)
+    main(train=False)

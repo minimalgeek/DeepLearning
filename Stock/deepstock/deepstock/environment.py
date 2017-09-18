@@ -81,8 +81,6 @@ class Environment:
     def reset(self):
         self.deposit = self.initial_deposit
         self.max_current_index = len(self.scaled_data) - self.max_days_to_hold
-        # self.current_index_pool = np.arange(self.window, self.max_current_index).tolist()
-        # random.shuffle(self.current_index_pool)
         self.current_index = self.window
         self.actions = {}
         return self.state()
@@ -106,10 +104,9 @@ class Environment:
         elif action.act == Action.SELL:
             reward = (first_day_price - last_day_price) / first_day_price
         else:
-            reward = 0  # math.fabs(last_day_price - first_day_price) * Environment.SKIP_REWARD_MULTIPLIER
+            reward = 0
 
         self.current_index += 1  # action.days
-        # self.current_index = self.current_index_pool.pop()
 
         # store information for further inspectation
         invested_amount = self.deposit * action.percentage / 100
@@ -120,7 +117,6 @@ class Environment:
         next_state = self.state()
         done = self.deposit < self.minimal_deposit or \
                self.max_current_index < self.current_index
-        # or len(self.current_index_pool) == 0
         return next_state, reward, done
 
     def future_data_for_action(self, action: Action):
