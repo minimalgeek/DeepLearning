@@ -117,7 +117,7 @@ class Environment:
         next_state = self.state()
         done = self.deposit < self.minimal_deposit or \
                self.max_current_index < self.current_index
-        return next_state, reward, done
+        return next_state, reward * 100, done
 
     def future_data_for_action(self, action: Action):
         trade_day_index = self.current_index - 1

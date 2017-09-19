@@ -7,7 +7,7 @@ import random
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout, Activation, Flatten
 from keras.optimizers import Adam
-from keras.losses import categorical_crossentropy
+from keras.losses import categorical_crossentropy, mean_squared_error
 
 LOGGER = logging.getLogger(__name__)
 
@@ -79,9 +79,9 @@ class Agent:
         model.add(Dropout(0.1))
 
         model.add(Dense(self.action_size))
-        model.add(Activation('softmax'))
+        model.add(Activation('linear'))
 
-        model.compile(loss=categorical_crossentropy,
+        model.compile(loss=mean_squared_error,
                       optimizer=Adam(),
                       metrics=['accuracy'])
         LOGGER.info('Model successfully built with hidden layers: {}, {}, {}'
@@ -115,7 +115,6 @@ class Agent:
         if self.replay_index >= self.replay_buffer:
             self.replay()
             self.replay_index = 0
-            # state = new_state ???
 
     def replay(self):
         # randomly sample our experience replay memory
@@ -135,15 +134,15 @@ class Agent:
             old_q = self.model.predict(state_vals, batch_size=1)
             new_q = self.model.predict(next_state_vals, batch_size=1)
             max_q = np.max(new_q)
-            update = reward * 100  # 1 if reward > 0 else -1
+            update = reward  # 10 if reward > 0 else -10
             if not done:
                 update += self.gamma * max_q
             old_q[0][action] = update
             x_train.append(state.values)
             y_train.append(old_q[0])
 
-        x_train = np.array(x_train)  # (32, 50, 15)
-        y_train = np.array(y_train)  # (32, 90)
+        x_train = np.array(x_train)  # (replay_buffer, 50, 15)
+        y_train = np.array(y_train)  # (replay_buffer, 90)
         self.model.fit(x_train,
                        y_train,
                        batch_size=self.replay_buffer,

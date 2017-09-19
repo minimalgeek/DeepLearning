@@ -17,7 +17,7 @@ min_days_to_hold = 5
 max_days_to_hold = 5
 
 
-def main(train):
+def main(train, action_bias):
     environment = Environment(tickers,
                               initial_deposit=100000,
                               from_date=datetime(2007, 1, 1),
@@ -28,8 +28,8 @@ def main(train):
                   environment.action_size(),
                   epochs=epochs,
                   replay_buffer=64,
-                  memory_queue_length=64,
-                  gamma=0.9)
+                  memory_queue_length=256,
+                  gamma=0.8)
 
     if train:
         for i in range(epochs):
@@ -45,9 +45,9 @@ def main(train):
             LOGGER.info('Balance for current game: %d', environment.deposit)
 
         pprint(environment.actions)
-        agent.save(WEIGHTS_FILE)
+        agent.save(environment.main_ticker + '.h5')
     else:
-        agent.load(WEIGHTS_FILE)
+        agent.load(environment.main_ticker + '.h5')
 
     # Test on!
     test_environment = Environment(tickers,
@@ -62,12 +62,19 @@ def main(train):
     done = False
 
     while not done:
-        action = agent.act(state, False, 0.99995)
+        action = agent.act(state, False, action_bias)
         next_state, _, done = test_environment.step(action)
         state = next_state
-    LOGGER.info('Balance for current game: %d', test_environment.deposit)
-    pprint(test_environment.actions)
+    print_results_on_test_environment(test_environment)
     export_to_file(test_environment.actions)
+
+
+def print_results_on_test_environment(test_environment):
+    LOGGER.info('Balance for current game: %d', test_environment.deposit)
+    LOGGER.info(test_environment.actions)
+    from collections import Counter
+    pos_neg_counter = Counter(['+' if action[1] > 0 else '-' for action in test_environment.actions.values()])
+    LOGGER.info(pos_neg_counter)
 
 
 def export_to_file(actions: dict):
@@ -81,4 +88,4 @@ def export_to_file(actions: dict):
 
 
 if __name__ == '__main__':
-    main(train=False)
+    main(train=False, action_bias=0)  # allow every action
