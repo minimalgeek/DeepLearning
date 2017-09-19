@@ -88,4 +88,4 @@ def export_to_file(actions: dict):
 
 
 if __name__ == '__main__':
-    main(train=False, action_bias=10)  # allow every action
+    main(train=False, action_bias=13)  # allow every action
