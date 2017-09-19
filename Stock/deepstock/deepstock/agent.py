@@ -7,7 +7,9 @@ import random
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout, Activation, Flatten
 from keras.optimizers import Adam
-from keras.losses import categorical_crossentropy, mean_squared_error
+from keras.losses import mean_squared_error
+
+from keras.layers import Conv1D, MaxPooling1D
 
 LOGGER = logging.getLogger(__name__)
 
@@ -47,36 +49,47 @@ class Agent:
 
         model = Sequential()
 
-        # # CNN layers
-        # model.add(Conv1D(32, 3,
-        #                  input_shape=self.input_shape,
-        #                  padding='same',
-        #                  activation='relu'))  # kernel_constraint=maxnorm(3)
-        # model.add(Dropout(0.1))
-        # model.add(Conv1D(32, 3,
-        #                  padding='same',
-        #                  activation='relu'))
-        # # model.add(MaxPooling1D(pool_size=3))
-        # model.add(Flatten())
-        # model.add(Dense(first_layer_size))
-        # model.add(Activation('relu'))
-        # model.add(Dropout(0.1))
-        # # CNN end
-
-        # DNN layers
-        model.add(Dense(first_layer_size, input_shape=self.input_shape))
+        # CNN layers
+        model.add(Conv1D(input_shape=self.input_shape,
+                         filters=64,
+                         kernel_size=4,
+                         padding='same',
+                         activation='relu'))
+        model.add(Conv1D(filters=64,
+                         kernel_size=4,
+                         padding='same',
+                         activation='relu'))
+        model.add(MaxPooling1D(pool_size=4))
+        model.add(Conv1D(filters=128,
+                         kernel_size=4,
+                         padding='same',
+                         activation='relu'))
+        model.add(Conv1D(filters=128,
+                         kernel_size=4,
+                         padding='same',
+                         activation='relu'))
+        model.add(MaxPooling1D(pool_size=4))
         model.add(Flatten())
+
+        model.add(Dense(first_layer_size))
         model.add(Activation('relu'))
         model.add(Dropout(0.1))
-        # DNN end
+        # CNN end
+
+        # # DNN layers
+        # model.add(Dense(first_layer_size, input_shape=self.input_shape))
+        # model.add(Flatten())
+        # model.add(Activation('relu'))
+        # model.add(Dropout(0.1))
+        # # DNN end
 
         model.add(Dense(second_layer_size))
         model.add(Activation('relu'))
         model.add(Dropout(0.1))
 
-        model.add(Dense(third_layer_size))
-        model.add(Activation('relu'))
-        model.add(Dropout(0.1))
+        # model.add(Dense(third_layer_size))
+        # model.add(Activation('relu'))
+        # model.add(Dropout(0.1))
 
         model.add(Dense(self.action_size))
         model.add(Activation('linear'))
