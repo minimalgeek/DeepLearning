@@ -73,7 +73,7 @@ class Agent:
 
         model.add(Dense(first_layer_size))
         model.add(Activation('relu'))
-        model.add(Dropout(0.1))
+        model.add(Dropout(0.5))
         # CNN end
 
         # # DNN layers
@@ -85,11 +85,11 @@ class Agent:
 
         model.add(Dense(second_layer_size))
         model.add(Activation('relu'))
-        model.add(Dropout(0.1))
+        model.add(Dropout(0.5))
 
-        # model.add(Dense(third_layer_size))
-        # model.add(Activation('relu'))
-        # model.add(Dropout(0.1))
+        model.add(Dense(third_layer_size))
+        model.add(Activation('relu'))
+        model.add(Dropout(0.5))
 
         model.add(Dense(self.action_size))
         model.add(Activation('linear'))
