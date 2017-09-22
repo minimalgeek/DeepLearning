@@ -13,8 +13,8 @@ LOGGER = logging.getLogger(__name__)
 
 epochs = 100  # number of games
 tickers = ['AAPL']  # , 'NVDA', 'GOOG', 'INTC'
-min_days_to_hold = 15
-max_days_to_hold = 15
+min_days_to_hold = 5
+max_days_to_hold = 25
 
 
 def main(train, action_bias):

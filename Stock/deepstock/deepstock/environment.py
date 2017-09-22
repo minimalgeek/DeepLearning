@@ -34,6 +34,7 @@ class Environment:
                  window=50,
                  min_days_to_hold=5,
                  max_days_to_hold=5,
+                 days_step=5,
                  scaler=None):
         self.initial_deposit = initial_deposit
         self.window = window
@@ -50,7 +51,7 @@ class Environment:
         self.data.drop('Volume', inplace=True, axis=1)
 
         days_to_holds = np.arange(min_days_to_hold,
-                                  max_days_to_hold + 1)
+                                  max_days_to_hold + 1, days_step)
 
         self.main_ticker = ticker_list[0]
         self.action_space = [Action(self.main_ticker, act, days, 10)
