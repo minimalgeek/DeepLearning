@@ -11,10 +11,10 @@ WEIGHTS_FILE = 'model.h5'
 
 LOGGER = logging.getLogger(__name__)
 
-epochs = 100  # number of games
+epochs = 150  # number of games
 tickers = ['AAPL']  # , 'NVDA', 'GOOG', 'INTC'
 min_days_to_hold = 5
-max_days_to_hold = 25
+max_days_to_hold = 15
 
 
 def main(train, action_bias):
@@ -88,4 +88,4 @@ def export_to_file(actions: dict):
 
 
 if __name__ == '__main__':
-    main(train=True, action_bias=0)  # 0: allow every action; high number: filter
+    main(train=False, action_bias=0)  # 0: allow every action; high number: filter

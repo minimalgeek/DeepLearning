@@ -31,10 +31,10 @@ class Environment:
                  initial_deposit=1000,
                  from_date=datetime.datetime(2007, 1, 1),
                  to_date=datetime.datetime(2017, 1, 1),
-                 window=50,
+                 window=70,
                  min_days_to_hold=5,
                  max_days_to_hold=5,
-                 days_step=5,
+                 days_step=10,
                  scaler=None):
         self.initial_deposit = initial_deposit
         self.window = window
@@ -97,7 +97,7 @@ class Environment:
 
         covered_df = self.future_data_for_action(action)
         on_date = covered_df.index[0]
-        first_day_price = covered_df.iloc[0]['Close']
+        first_day_price = covered_df.iloc[0]['Open']
         last_day_price = covered_df.iloc[-1]['Close']
 
         if action.act == Action.BUY:
@@ -121,7 +121,7 @@ class Environment:
         return next_state, reward * 100, done
 
     def future_data_for_action(self, action: Action):
-        trade_day_index = self.current_index - 1
+        trade_day_index = self.current_index
         return self.data.loc[action.ticker].iloc[trade_day_index: trade_day_index + action.days]
 
     def state(self):
