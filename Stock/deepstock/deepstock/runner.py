@@ -3,21 +3,19 @@ from pprint import pprint
 from datetime import datetime
 import csv
 
-from .action import Action
-from .agent import Agent
-from .environment import Environment
-
-WEIGHTS_FILE = 'model.h5'
+import deepstock
+from agent import Agent
+from environment import Environment
 
 LOGGER = logging.getLogger(__name__)
 
-epochs = 150  # number of games
-tickers = ['AAPL']  # , 'NVDA', 'GOOG', 'INTC'
+epochs = 50  # number of games
+tickers = ['SPY']  # 'AAPL', 'NVDA', 'GOOG', 'INTC'
 min_days_to_hold = 5
 max_days_to_hold = 15
 
 
-def main(train, action_bias):
+def main(train, action_bias=0):
     environment = Environment(tickers,
                               initial_deposit=100000,
                               from_date=datetime(2007, 1, 1),
@@ -29,7 +27,7 @@ def main(train, action_bias):
                   epochs=epochs,
                   replay_buffer=64,
                   memory_queue_length=256,
-                  gamma=0.7)
+                  gamma=0.2)
 
     if train:
         for i in range(epochs):
@@ -88,4 +86,4 @@ def export_to_file(actions: dict):
 
 
 if __name__ == '__main__':
-    main(train=False, action_bias=0)  # 0: allow every action; high number: filter
+    main(train=False, action_bias=70)  # 0: allow every action; high number: filter

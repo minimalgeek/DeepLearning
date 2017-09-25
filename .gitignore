@@ -55,6 +55,8 @@ local_settings.py
 
 # Other logs
 *.log.*
+*.log.
+info.log.*
 
 # Flask instance folder
 instance/

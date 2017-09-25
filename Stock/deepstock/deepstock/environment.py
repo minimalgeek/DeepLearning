@@ -3,10 +3,11 @@ import pandas as pd
 import pandas_datareader as pdr
 import datetime
 import logging
+import math
 
 from sklearn.preprocessing import StandardScaler
 
-from .action import Action
+from action import Action
 
 ####################################
 # TODO: remove this after API update
@@ -107,6 +108,9 @@ class Environment:
         else:
             reward = 0
 
+        if math.isnan(reward): # sometimes the first_day_price is NaN
+            reward = 0
+
         self.current_index += 1  # action.days
 
         # store information for further inspectation
@@ -118,7 +122,7 @@ class Environment:
         next_state = self.state()
         done = self.deposit < self.minimal_deposit or \
                self.max_current_index < self.current_index
-        return next_state, reward * 100, done
+        return next_state, reward * 10000, done
 
     def future_data_for_action(self, action: Action):
         trade_day_index = self.current_index

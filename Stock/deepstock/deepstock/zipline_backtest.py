@@ -4,9 +4,6 @@ import logging
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-# from .agent import Agent
-# from .environment import Environment
-
 tickers = ['AAPL', 'NVDA', 'GOOG', 'INTC']
 start = datetime(2013, 1, 1)
 end = datetime(2017, 1, 1)
