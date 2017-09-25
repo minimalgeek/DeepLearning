@@ -86,4 +86,3 @@ def export_to_file(actions: dict):
 
 
 if __name__ == '__main__':
-    main(train=False, action_bias=70)  # 0: allow every action; high number: filter
