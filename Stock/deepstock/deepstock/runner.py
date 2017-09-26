@@ -86,4 +86,4 @@ def export_to_file(actions: dict):
 
 
 if __name__ == '__main__':
-    main(train=False, action_bias=160)  # 0: allow every action; high number: filter
+    main(train=False, action_bias=180)  # 0: allow every action; high number: filter
