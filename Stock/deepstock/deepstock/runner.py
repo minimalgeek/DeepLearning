@@ -9,7 +9,7 @@ from environment import Environment
 
 LOGGER = logging.getLogger(__name__)
 
-epochs = 50  # number of games
+epochs = 100  # number of games
 tickers = ['SPY']  # 'AAPL', 'NVDA', 'GOOG', 'INTC'
 min_days_to_hold = 5
 max_days_to_hold = 15
@@ -18,16 +18,16 @@ max_days_to_hold = 15
 def main(train, action_bias=0):
     environment = Environment(tickers,
                               initial_deposit=100000,
-                              from_date=datetime(2007, 1, 1),
-                              to_date=datetime(2013, 1, 1),
+                              from_date=datetime(2004, 1, 1),
+                              to_date=datetime(2010, 1, 1),
                               min_days_to_hold=min_days_to_hold,
                               max_days_to_hold=max_days_to_hold)
     agent = Agent(environment.state_size(),
                   environment.action_size(),
                   epochs=epochs,
+                  gamma=0.2,
                   replay_buffer=64,
-                  memory_queue_length=256,
-                  gamma=0.2)
+                  memory_queue_length=32)
 
     if train:
         for i in range(epochs):
@@ -50,8 +50,8 @@ def main(train, action_bias=0):
     # Test on!
     test_environment = Environment(tickers,
                                    initial_deposit=100000,
-                                   from_date=datetime(2013, 1, 1),
-                                   to_date=datetime(2017, 1, 1),
+                                   from_date=datetime(2010, 1, 1),
+                                   to_date=datetime(2013, 1, 1),
                                    min_days_to_hold=min_days_to_hold,
                                    max_days_to_hold=max_days_to_hold,
                                    scaler=environment.scaler)
@@ -86,4 +86,4 @@ def export_to_file(actions: dict):
 
 
 if __name__ == '__main__':
-    main(train=False, action_bias=180)  # 0: allow every action; high number: filter
+    main(train=False, action_bias=250)  # 0: allow every action; high number: filter

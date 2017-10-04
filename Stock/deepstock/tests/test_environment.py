@@ -14,23 +14,19 @@ def environment():
 
 
 def test_init(environment: Environment):
-    # buy3...buy7,sell3...sell7,skip3...skip7 for AAPL, IBM, GOOG
-    # 15 * 3
-    assert len(environment.action_space) == 45
-    assert environment.train_X_df.shape == (1888, 15)
-    assert environment.test_X_df.shape == (630, 15)
+    assert len(environment.action_space) == 2
 
 
 def test_reset(environment: Environment):
     environment.reset()
-    assert environment.deposit == 100000
-    assert environment.state().shape == (50, 15)
+    assert environment.deposit == 1000
+    assert environment.state().shape == (70, 12)
     assert len(environment.actions) == 0
 
 
 def test_make_step(environment: Environment):
     assert environment.state().index[0] == datetime(2007, 1, 3)
-    next_state, reward, done = environment.step(0)  # AAPL BUY 3 days
-    assert next_state.index[0] == datetime(2007, 1, 8)
-    assert round(reward, 2) == 0.24  # 12.21 - 11.97
+    next_state, reward, done = environment.step(0)
+    assert next_state.index[0].to_pydatetime() == datetime(2007, 1, 4)
+    assert round(reward, 2) == -23.18
     assert not done

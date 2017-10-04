@@ -34,12 +34,16 @@ class Agent:
 
         self.epsilon = 1
         self.replay_buffer = replay_buffer
-        self.memory = {}
-        for i in range(action_size):
-            self.memory[i] = deque(maxlen=memory_queue_length)
-        self.replay_index = 0
+        self.memory_queue_length = memory_queue_length
+        self.reset_memory()
 
         self._build_model()
+
+    def reset_memory(self):
+        self.replay_index = 0
+        self.memory = {}
+        for i in range(self.action_size):
+            self.memory[i] = deque(maxlen=self.memory_queue_length)
 
     def _build_model(self):
         first_layer_size = int(self.input_shape[0] *
@@ -159,7 +163,7 @@ class Agent:
         self.model.fit(x_train,
                        y_train,
                        batch_size=self.replay_buffer,
-                       epochs=8,
+                       epochs=16,
                        verbose=0)
 
     def load(self, name):
