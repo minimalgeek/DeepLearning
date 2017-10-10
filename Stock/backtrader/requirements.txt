@@ -1,0 +1,3 @@
+jupyter
+pyfolio
+backtrader[plotting]
