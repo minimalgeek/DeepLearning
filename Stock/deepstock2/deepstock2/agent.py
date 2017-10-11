@@ -18,7 +18,7 @@ class Agent:
     def __init__(self,
                  input_shape,
                  action_size,
-                 epochs=0,
+                 epochs=100,
                  min_epsilon=0.05,
                  gamma=0.9,
                  replay_buffer=2048,
@@ -37,7 +37,7 @@ class Agent:
         self._build_model()
 
     def reset_memory(self):
-        self.memory = deque(self.replay_buffer)
+        self.memory = deque(maxlen=self.replay_buffer)
 
     def _build_model(self):
 
@@ -89,15 +89,11 @@ class Agent:
             self.epsilon -= (1 / self.epochs)
         LOGGER.info('New epsilon is {}'.format(self.epsilon))
 
-    def act(self, state, with_random=True, min_value=1.5):
+    def act(self, state, with_random=True):
         if with_random and random.random() < self.epsilon:  # choose random action
             action = np.random.randint(0, self.action_size)
         else:  # choose best action from Q(s,a) values
             q_val = self.model.predict(Agent.state_to_array(state), batch_size=1)
-            if not with_random:
-                LOGGER.info('\tQ vector: {}'.format(q_val))
-                if np.max(q_val[0]) < min_value:
-                    return -1
             action = np.argmax(q_val[0])
             LOGGER.info('\t\tChosen action index: {}'.format(action))
         return action
@@ -149,4 +145,4 @@ class Agent:
 
     @staticmethod
     def state_to_array(state):
-        return np.expand_dims(state.values, axis=0)  # (50, 15) -> (1, 50, 15)
+        return np.expand_dims(state, axis=0)  # (50, 4) -> (1, 50, 4)
