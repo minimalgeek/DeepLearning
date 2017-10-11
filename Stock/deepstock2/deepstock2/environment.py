@@ -22,7 +22,8 @@ class EnvironmentStrategy(bt.Strategy):
 
     def __init__(self):
         self.order = None
-        self.to_remember: StateToRemember = None
+        self.previous_action: StateToRemember = None
+        self.previous_hold_action: StateToRemember = None
         # read from params
         self.environment = self.params.environment
         self.agent = self.environment.agent
@@ -31,7 +32,6 @@ class EnvironmentStrategy(bt.Strategy):
 
     def notify_cashvalue(self, cash, value):
         self.value = value
-        #self.log('New cash value: {}'.format(self.value))
 
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
@@ -48,9 +48,9 @@ class EnvironmentStrategy(bt.Strategy):
                       order.executed.value,
                       order.executed.comm))
 
-            if self.to_remember.action.act in [Action.BUY, Action.SELL]:
-                self.to_remember.refresh_with_state()
-                self.agent.remember(*self.to_remember.to_tuple())
+            if self.previous_action.action.act in [Action.BUY, Action.SELL]:
+                self.previous_action.refresh_with_state()
+                self.agent.remember(*self.previous_action.to_tuple())
 
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
             self.log('Order Canceled/Margin/Rejected')
@@ -64,11 +64,17 @@ class EnvironmentStrategy(bt.Strategy):
         self.log('OPERATION PROFIT, GROSS %.2f, NET %.2f' %
                  (trade.pnl, trade.pnlcomm))
 
-        if self.to_remember.action.act == Action.CLOSE:
-            self.to_remember.refresh_with_state(trade.pnlcomm)
-            self.agent.remember(*self.to_remember.to_tuple())
+        if self.previous_action.action.act == Action.CLOSE:
+            self.previous_action.refresh_with_state(trade.pnlcomm)
+            self.agent.remember(*self.previous_action.to_tuple())
 
     def next(self):
+
+        if self.previous_hold_action:
+            self.previous_hold_action.refresh_with_state()
+            self.agent.remember(*self.previous_hold_action.to_tuple())
+            self.previous_hold_action = None
+
         # Check if an order is pending ... if yes, we cannot send a 2nd one
         if self.order:
             return
@@ -78,9 +84,9 @@ class EnvironmentStrategy(bt.Strategy):
         current_action = self.environment.action_space[action_idx]
         action_text = current_action.act
 
-        self.to_remember = StateToRemember(current_action, action_idx, self)
+        self.previous_action = StateToRemember(current_action, action_idx, self)
         if action_text == Action.HOLD:
-            pass
+            self.previous_hold_action = StateToRemember(current_action, action_idx, self)
         elif self.position and action_text == Action.CLOSE:
             self.close()
         elif not self.position:
@@ -89,7 +95,7 @@ class EnvironmentStrategy(bt.Strategy):
             elif action_text == Action.SELL:
                 self.sell()
         else:
-            self.to_remember = None
+            self.previous_action = None
 
     def _shift(self, data, value=0):
         return data.get(size=self.environment.window+1, ago=value)

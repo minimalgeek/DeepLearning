@@ -22,7 +22,7 @@ class Agent:
                  min_epsilon=0.05,
                  gamma=0.9,
                  replay_buffer=2048,
-                 mini_batch_size=64):
+                 mini_batch_size=32):
         self.input_shape = input_shape
         self.action_size = action_size
         self.epochs = epochs
@@ -37,7 +37,11 @@ class Agent:
         self._build_model()
 
     def reset_memory(self):
-        self.memory = deque(maxlen=self.replay_buffer)
+        self.memory = {}
+        max_len = self.replay_buffer//self.action_size
+        for i in range(self.action_size):
+            self.memory[i] = deque(maxlen=max_len)
+        #self.memory = deque(maxlen=self.replay_buffer)
 
     def _build_model(self):
 
@@ -100,14 +104,16 @@ class Agent:
 
     def remember(self, state, action, reward, next_state, done):
         action_tuple = (state, action, reward, next_state, done)
-        LOGGER.info('Remember {}'.format(action))
-        self.memory.append(action_tuple)
-        if len(self.memory) == self.replay_buffer:
-            self.replay()
+        self.memory[action].append(action_tuple)
+        self.replay()
 
     def replay(self):
-        LOGGER.info('Experience replay for {} memories'.format(self.mini_batch_size))
-        mini_batch = random.sample(self.memory, self.mini_batch_size)
+        #LOGGER.info('Experience replay for {} memories'.format(self.mini_batch_size))
+        flat_list = [item for sublist in self.memory.values() for item in sublist]
+        if len(flat_list) < self.replay_buffer:
+            return
+        mini_batch = random.sample(flat_list, self.mini_batch_size)
+        #mini_batch = random.sample(self.memory, self.mini_batch_size)
         x_train = []
         y_train = []
 
@@ -131,7 +137,7 @@ class Agent:
         y_train = np.array(y_train)
         self.model.fit(x_train,
                        y_train,
-                       batch_size=self.replay_buffer,
+                       batch_size=self.mini_batch_size,
                        epochs=1,
                        verbose=0)
 
