@@ -7,7 +7,7 @@ from environment import Environment
 
 LOGGER = logging.getLogger(__name__)
 
-epochs = 20  # number of games
+epochs = 2000  # number of games
 ticker = 'AAPL'  # 'NVDA', 'GOOG', 'INTC'
 
 

@@ -20,9 +20,9 @@ class Agent:
                  action_size,
                  epochs=100,
                  min_epsilon=0.05,
-                 gamma=0.9,
+                 gamma=0.99,
                  replay_buffer=2048,
-                 mini_batch_size=32):
+                 mini_batch_size=64):
         self.input_shape = input_shape
         self.action_size = action_size
         self.epochs = epochs
@@ -138,7 +138,7 @@ class Agent:
         self.model.fit(x_train,
                        y_train,
                        batch_size=self.mini_batch_size,
-                       epochs=1,
+                       epochs=8,
                        verbose=0)
 
     def load(self, name):
