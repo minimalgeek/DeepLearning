@@ -106,7 +106,7 @@ class Agent:
             self.replay()
 
     def replay(self):
-        LOGGER.info('Experience replay for {} memories'.format(len(self.mini_batch_size)))
+        LOGGER.info('Experience replay for {} memories'.format(self.mini_batch_size))
         mini_batch = random.sample(self.memory, self.mini_batch_size)
         x_train = []
         y_train = []
@@ -124,7 +124,7 @@ class Agent:
             if not done:
                 update += self.gamma * max_q
             old_q[0][action] = update
-            x_train.append(state.values)
+            x_train.append(state)
             y_train.append(old_q[0])
 
         x_train = np.array(x_train)

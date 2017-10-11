@@ -4,7 +4,7 @@ class Action:
     CLOSE = 'close'
     HOLD = 'hold'
 
-    acts = [BUY, SELL, HOLD]
+    acts = [BUY, SELL, CLOSE, HOLD]
 
     def __init__(self, ticker, act):
         self.ticker = ticker

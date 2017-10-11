@@ -31,7 +31,7 @@ class EnvironmentStrategy(bt.Strategy):
 
     def notify_cashvalue(self, cash, value):
         self.value = value
-        self.log('New cash value: {}'.format(self.value))
+        #self.log('New cash value: {}'.format(self.value))
 
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
@@ -49,10 +49,8 @@ class EnvironmentStrategy(bt.Strategy):
                       order.executed.comm))
 
             if self.to_remember.action.act in [Action.BUY, Action.SELL]:
-                self.to_remember.refresh_with_state(self)
+                self.to_remember.refresh_with_state()
                 self.agent.remember(*self.to_remember.to_tuple())
-            else:
-                self.log('\t\tERROR: notify order is not a Buy or Sell')
 
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
             self.log('Order Canceled/Margin/Rejected')
@@ -66,11 +64,9 @@ class EnvironmentStrategy(bt.Strategy):
         self.log('OPERATION PROFIT, GROSS %.2f, NET %.2f' %
                  (trade.pnl, trade.pnlcomm))
 
-        if self.to_remember.act == Action.CLOSE:
-            self.to_remember.refresh_with_state(self, trade.pnlcomm)
+        if self.to_remember.action.act == Action.CLOSE:
+            self.to_remember.refresh_with_state(trade.pnlcomm)
             self.agent.remember(*self.to_remember.to_tuple())
-        else:
-            self.log('\t\tERROR: notify trade is not a Close')
 
     def next(self):
         # Check if an order is pending ... if yes, we cannot send a 2nd one
@@ -82,7 +78,7 @@ class EnvironmentStrategy(bt.Strategy):
         current_action = self.environment.action_space[action_idx]
         action_text = current_action.act
 
-        self.to_remember = StateToRemember(current_action, self)
+        self.to_remember = StateToRemember(current_action, action_idx, self)
         if action_text == Action.HOLD:
             pass
         elif self.position and action_text == Action.CLOSE:
@@ -120,10 +116,11 @@ class EnvironmentStrategy(bt.Strategy):
 
 
 class StateToRemember:
-    def __init__(self, action, strategy: EnvironmentStrategy):
+    def __init__(self, action, action_idx, strategy: EnvironmentStrategy):
         self.state = None
         self.next_state = None
         self.action = action
+        self.action_idx = action_idx
         self.reward = 0
         self.done = False
         self.strategy = strategy
@@ -135,7 +132,7 @@ class StateToRemember:
         self.reward = reward
 
     def to_tuple(self):
-        return (self.state, self.action, self.reward, self.next_state, self.done)
+        return (self.state, self.action_idx, self.reward, self.next_state, self.done)
 
 
 class Environment:
@@ -158,12 +155,9 @@ class Environment:
         if self.scaler is None:
             LOGGER.info('Create new scaler')
             self.scaler = StandardScaler()
-            flat_scaled_data = self.scaler.fit_transform(flat_data)
+            self.scaler.fit(flat_data)
         else:
             LOGGER.info('Use existing scaler')
-            flat_scaled_data = self.scaler.transform(flat_data)
-        self.scaled_data = pd.DataFrame(data=flat_scaled_data, columns=flat_data.columns,
-                                        index=flat_data.index)
 
     def reset(self):
         self.cerebro = bt.Cerebro()
@@ -194,5 +188,4 @@ class Environment:
         return len(self.action_space)
 
     def state_size(self):
-        return (50, 4)
-        # return self.cerebro.strats[0]
+        return (self.window, 4)
