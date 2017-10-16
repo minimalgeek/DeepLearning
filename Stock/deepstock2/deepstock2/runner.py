@@ -7,7 +7,7 @@ from environment import Environment
 
 LOGGER = logging.getLogger(__name__)
 
-epochs = 2000  # number of games
+epochs = 100  # number of games
 ticker = 'AAPL'  # 'NVDA', 'GOOG', 'INTC'
 
 
@@ -45,6 +45,7 @@ def main(train):
 
     test_environment.reset()
     test_environment.run()
+    LOGGER.info('Backtest balance: {}'.format(test_environment.cerebro.broker.get_value()))
 
 
 if __name__ == '__main__':

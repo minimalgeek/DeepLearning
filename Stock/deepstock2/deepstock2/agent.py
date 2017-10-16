@@ -1,15 +1,13 @@
+import logging
+import random
 from collections import deque
 
 import numpy as np
-import logging
-import random
-
-from keras.models import Sequential
-from keras.layers.core import Dense, Dropout, Activation, Flatten
-from keras.optimizers import Adam
-from keras.losses import mean_squared_error
-
 from keras.layers import Conv1D, MaxPooling1D
+from keras.layers.core import Dense, Dropout, Activation, Flatten
+from keras.losses import mean_squared_error
+from keras.models import Sequential
+from keras.optimizers import Adam
 
 LOGGER = logging.getLogger(__name__)
 
@@ -19,7 +17,7 @@ class Agent:
                  input_shape,
                  action_size,
                  epochs=100,
-                 min_epsilon=0.05,
+                 min_epsilon=0,
                  gamma=0.99,
                  replay_buffer=2048,
                  mini_batch_size=64):
@@ -38,10 +36,10 @@ class Agent:
 
     def reset_memory(self):
         self.memory = {}
-        max_len = self.replay_buffer//self.action_size
+        max_len = self.replay_buffer // self.action_size
         for i in range(self.action_size):
             self.memory[i] = deque(maxlen=max_len)
-        #self.memory = deque(maxlen=self.replay_buffer)
+            # self.memory = deque(maxlen=self.replay_buffer)
 
     def _build_model(self):
 
@@ -49,14 +47,14 @@ class Agent:
 
         model.add(Conv1D(input_shape=self.input_shape,
                          filters=64,
-                         kernel_size=4,
+                         kernel_size=3,
                          padding='same',
                          activation='relu'))
         model.add(Conv1D(filters=64,
-                         kernel_size=4,
+                         kernel_size=3,
                          padding='same',
                          activation='relu'))
-        model.add(MaxPooling1D(pool_size=4))
+        model.add(MaxPooling1D(pool_size=3))
         model.add(Conv1D(filters=128,
                          kernel_size=4,
                          padding='same',
@@ -68,10 +66,6 @@ class Agent:
         model.add(MaxPooling1D(pool_size=4))
         model.add(Flatten())
 
-        model.add(Dense(100))
-        model.add(Activation('relu'))
-        model.add(Dropout(0.5))
-
         model.add(Dense(50))
         model.add(Activation('relu'))
         model.add(Dropout(0.5))
@@ -80,8 +74,12 @@ class Agent:
         model.add(Activation('relu'))
         model.add(Dropout(0.5))
 
+        model.add(Dense(10))
+        model.add(Activation('relu'))
+        model.add(Dropout(0.5))
+
         model.add(Dense(self.action_size))
-        model.add(Activation('softmax'))
+        model.add(Activation('linear'))
 
         model.compile(loss=mean_squared_error,
                       optimizer=Adam(),
@@ -104,16 +102,17 @@ class Agent:
 
     def remember(self, state, action, reward, next_state, done):
         action_tuple = (state, action, reward, next_state, done)
+        # LOGGER.info('Remember: {} -> {}'.format(state[0], action))
         self.memory[action].append(action_tuple)
         self.replay()
 
     def replay(self):
-        #LOGGER.info('Experience replay for {} memories'.format(self.mini_batch_size))
+        # LOGGER.info('Experience replay for {} memories'.format(self.mini_batch_size))
         flat_list = [item for sublist in self.memory.values() for item in sublist]
         if len(flat_list) < self.replay_buffer:
             return
         mini_batch = random.sample(flat_list, self.mini_batch_size)
-        #mini_batch = random.sample(self.memory, self.mini_batch_size)
+        # mini_batch = random.sample(self.memory, self.mini_batch_size)
         x_train = []
         y_train = []
 

@@ -23,7 +23,6 @@ class EnvironmentStrategy(bt.Strategy):
     def __init__(self):
         self.order = None
         self.previous_action: StateToRemember = None
-        self.previous_hold_action: StateToRemember = None
         # read from params
         self.environment = self.params.environment
         self.agent = self.environment.agent
@@ -48,9 +47,9 @@ class EnvironmentStrategy(bt.Strategy):
                       order.executed.value,
                       order.executed.comm))
 
-            if self.previous_action.action.act in [Action.BUY, Action.SELL]:
-                self.previous_action.refresh_with_state()
-                self.agent.remember(*self.previous_action.to_tuple())
+            # self.previous_action.refresh_with_state()
+            # self.agent.remember(*self.previous_action.to_tuple())
+            # self.previous_action = None
 
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
             self.log('Order Canceled/Margin/Rejected')
@@ -63,17 +62,19 @@ class EnvironmentStrategy(bt.Strategy):
 
         self.log('OPERATION PROFIT, GROSS %.2f, NET %.2f' %
                  (trade.pnl, trade.pnlcomm))
-
-        if self.previous_action.action.act == Action.CLOSE:
+        if trade.pnlcomm > 0:
             self.previous_action.refresh_with_state(trade.pnlcomm)
             self.agent.remember(*self.previous_action.to_tuple())
+        self.previous_action = None
 
     def next(self):
+        # if self.previous_action and self.previous_action.action.act == Action.HOLD:
+        #     self.previous_action.refresh_with_state(0.01)  # reward the patience
+        #     self.agent.remember(*self.previous_action.to_tuple())
+        #     self.previous_action = None
 
-        if self.previous_hold_action:
-            self.previous_hold_action.refresh_with_state()
-            self.agent.remember(*self.previous_hold_action.to_tuple())
-            self.previous_hold_action = None
+        if self.is_terminal_state():
+            self.environment.cerebro.runstop()
 
         # Check if an order is pending ... if yes, we cannot send a 2nd one
         if self.order:
@@ -85,20 +86,13 @@ class EnvironmentStrategy(bt.Strategy):
         action_text = current_action.act
 
         self.previous_action = StateToRemember(current_action, action_idx, self)
-        if action_text == Action.HOLD:
-            self.previous_hold_action = StateToRemember(current_action, action_idx, self)
-        elif self.position and action_text == Action.CLOSE:
-            self.close()
-        elif not self.position:
-            if action_text == Action.BUY:
-                self.buy()
-            elif action_text == Action.SELL:
-                self.sell()
-        else:
-            self.previous_action = None
+        if action_text == Action.BUY:
+            self.buy()
+        elif action_text == Action.SELL:
+            self.sell()
 
     def _shift(self, data, value=0):
-        return data.get(size=self.environment.window+1, ago=value)
+        return data.get(size=self.environment.window + 1, ago=value)
 
     def _create_pct_change_dataframe(self, value=0):
         frame = pd.DataFrame(
@@ -118,7 +112,7 @@ class EnvironmentStrategy(bt.Strategy):
         return self.environment.scaler.transform(next_frame)
 
     def is_terminal_state(self):
-        return False  # self.environment.min_value > self.value
+        return self.environment.min_value > self.value
 
 
 class StateToRemember:

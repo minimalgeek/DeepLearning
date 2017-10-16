@@ -1,10 +1,10 @@
 class Action:
     BUY = 'buy'
     SELL = 'sell'
-    CLOSE = 'close'
-    HOLD = 'hold'
+    # CLOSE = 'close'
+    # HOLD = 'hold'
 
-    acts = [BUY, SELL, CLOSE, HOLD]
+    acts = [BUY, SELL]  # HOLD
 
     def __init__(self, ticker, act):
         self.ticker = ticker
