@@ -1,3 +1,5 @@
 jupyter
 pyfolio
 backtrader[plotting]
+sklearn
+dora
