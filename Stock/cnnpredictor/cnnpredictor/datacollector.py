@@ -9,5 +9,13 @@ from sklearn.metrics import confusion_matrix, classification_report
 
 
 class Collector:
-    def __init__(self):
+    def __init__(self, 
+                 start_date, 
+                 end_date,
+                 ticker):
+        self.start_date = start_date
+        self.end_date = end_date
+        self.ticker = ticker
+
+    def collect(self):
         pass
