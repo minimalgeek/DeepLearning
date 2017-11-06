@@ -1,12 +1,6 @@
-import numpy as np
 import pandas as pd
 import pandas_datareader as pdr
 from datetime import datetime
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split, cross_val_score, KFold
-from sklearn.metrics import confusion_matrix, classification_report
-from sklearn.preprocessing import StandardScaler
-from pprint import pprint
 from collections import defaultdict
 import nasdaqpredictor
 import logging
@@ -31,10 +25,10 @@ class DataLoader:
 
         self.all_tickers = pd.read_csv(os.path.dirname(__file__) + ticker_file_name)
         self.original_data_dict = None
-        self._attempt_count = 0
 
-    def load_all(self):
+    def reload_all(self):
         self.original_data_dict = defaultdict(lambda: None)
+        self._attempt_count = 0
         self._load_for_tickers(self.all_tickers.ticker)
 
     def _load_for_tickers(self, tickers):
@@ -90,31 +84,32 @@ class DataTransformer:
         self.return_shift_days = return_shift_days
 
         if self.data_loader.original_data_dict is None:
-            self.data_loader.load_all()
+            self.data_loader.reload_all()
 
         self.transformed_data_dict = {}
 
     def transform(self):
         for ticker, data in self.data_loader.original_data_dict.items():
-            def steps():
-                yield self._shift
-                yield self._add_bulls
-                yield self._add_gts
-                yield self._add_return
-                yield self._clean_structure
-
-            for step in steps():
-                data = step(data)
+            for step in self.steps():
+                try:
+                    data = step(data)
+                except Exception as e:
+                    LOGGER.error(e)
 
             self.transformed_data_dict[ticker] = data
-            # data = self._shift(data)
-            # data = self._add_bulls(data)
-            # data = self._add_gts(data)
-            # data = self._add_return(data)
+
+    def steps(self):
+        yield self._set_index_column_if_necessary
+        yield self._shift
+        yield self._add_bulls
+        yield self._add_gts
+        yield self._add_return
+        yield self._clean_structure
 
     def _clean_structure(self, data) -> pd.DataFrame:
         data = data.drop(['Open', 'High', 'Low', 'Close'], axis=1, level=1)
         data.columns = data.columns.droplevel()
+        data.dropna(inplace=True)
         return data
 
     def _add_return(self, data) -> pd.DataFrame:
@@ -145,7 +140,12 @@ class DataTransformer:
     def _shift(self, data) -> pd.DataFrame:
         data.columns = pd.MultiIndex.from_product([['Shift 0'], ['Open', 'High', 'Low', 'Close']])
         for i in range(1, self.max_shift + 1):
-            shifted = data.iloc[:, [0, 1, 2, 3]].transform(i)
+            shifted = data.iloc[:, [0, 1, 2, 3]].shift(i)
             shifted.columns = pd.MultiIndex.from_product([['Shift ' + str(i)], ['Open', 'High', 'Low', 'Close']])
             data = pd.concat([data, shifted], axis=1)
+        return data
+
+    def _set_index_column_if_necessary(self, data: pd.DataFrame) -> pd.DataFrame:
+        if 'Date' in data.columns:
+            data.set_index('Date', inplace=True)
         return data

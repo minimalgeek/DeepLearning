@@ -41,7 +41,7 @@ def test_construct_file_name(loader: DataLoader):
 
 
 def test_load_all(loader: DataLoader):
-    loader.load_all()
+    loader.reload_all()
     assert len(loader.original_data_dict.values()) == 139
 
 
@@ -52,6 +52,8 @@ def test_transformer_init(transformer: DataTransformer):
     assert transformer.data_loader is not None
 
 
+@pytest.mark.long
 def test_shift(transformer: DataTransformer):
     transformer.transform()
     assert len(transformer.transformed_data_dict) == 139
+    assert transformer.transformed_data_dict['AAL'].shape == (2801, 61)
