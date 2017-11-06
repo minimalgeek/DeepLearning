@@ -30,6 +30,7 @@ class Model:
                  neurons_per_layer=150,
                  extra_layers=4,
                  epochs=500,
+                 batch_size=512,
                  learning_rate=0.001,
                  run_fit=True):
         self.transformer = transformer
@@ -37,6 +38,7 @@ class Model:
         self.neurons_per_layer = neurons_per_layer
         self.extra_layers = extra_layers  # beyond the first hidden layer
         self.epochs = epochs
+        self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.run_fit = run_fit
 
@@ -78,13 +80,13 @@ class Model:
         model.add(Dense(self.neurons_per_layer, input_dim=self.data_width, kernel_initializer='uniform'))
         model.add(BatchNormalization())
         model.add(Activation('relu'))
-        model.add(Dropout(0.5))
+        model.add(Dropout(0.2))
 
         for _ in range(self.extra_layers):
             model.add(Dense(self.neurons_per_layer, kernel_initializer='uniform'))
             model.add(BatchNormalization())
             model.add(Activation('relu'))
-            model.add(Dropout(0.5))
+            model.add(Dropout(0.2))
 
         model.add(Dense(2, kernel_initializer='uniform'))
         model.add(Activation('softmax'))
@@ -110,15 +112,15 @@ class Model:
             self.model.fit(self.X_train, self.y_train,
                            validation_data=(self.X_test, self.y_test),
                            epochs=self.epochs,
-                           batch_size=256,
+                           batch_size=self.batch_size,
                            verbose=2,
                            callbacks=[batch_print_callback])
+            self.model.save(FILEPATH)
         else:
             self.model = load_model(FILEPATH)
 
         score = self.model.evaluate(self.X_test, self.y_test)
         LOGGER.info('Test loss: {}, Test accuracy: {}'.format(score[0], score[1]))
-        self.model.save(FILEPATH)
 
     def predict(self, X_test):
         predicted = self.model.predict(X_test)
@@ -167,7 +169,8 @@ class ModelEvaluator:
         LOGGER.info('Real downs count')
         LOGGER.info(pd.value_counts(real_downs[predicted_downs]))
 
-        real_returns = self.model.test_returns[predicted_ups].append(-1 * self.model.test_returns[predicted_downs])
+        real_returns = np.append(self.model.test_returns[predicted_ups],
+                                      (-1 * self.model.test_returns[predicted_downs]))
 
         LOGGER.info('===\nStrategy returns\n===')
         self.print_returns_distribution(real_returns)
@@ -178,7 +181,7 @@ class ModelEvaluator:
     def print_returns_distribution(self, returns):
         neg = np.sum(returns[returns < 0])
         pos = np.sum(returns[returns > 0])
-        LOGGER.info('Negative returns: ', neg)
-        LOGGER.info('Positive returns: ', pos)
-        LOGGER.info('Pos/Neg ratio: ', pos / (neg * -1))
-        LOGGER.info('Sum of returns: ', np.sum(returns))
+        LOGGER.info('Negative returns: ' + str(neg))
+        LOGGER.info('Positive returns: ' + str(pos))
+        LOGGER.info('Pos/Neg ratio: ' + str(pos / (neg * -1)))
+        LOGGER.info('Sum of returns: ' + str(np.sum(returns)))
