@@ -13,8 +13,9 @@ if __name__ == '__main__':
     transformer.transform()
 
     model = Model(transformer,
-                  neurons_per_layer=50,
-                  learning_rate=0.001,
+                  extra_layers=6,
+                  neurons_per_layer=70,
+                  learning_rate=0.1,
                   batch_size=512,
                   epochs=1000,
                   run_fit=True)
@@ -24,5 +25,5 @@ if __name__ == '__main__':
     model.fit_neural_net()
 
     model_evaluator = ModelEvaluator(model,
-                                     certainty_multiplier=0.95)
+                                     certainty_multiplier=0.9)
     model_evaluator.evaluate()

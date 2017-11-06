@@ -105,8 +105,8 @@ class Model:
         self.X_train, self.X_test, self.y_train, self.y_test, self.test_returns = self._prepare_data_for_fit()
 
         batch_print_callback = LambdaCallback(
-            # on_batch_end=lambda batch, logs: [LOGGER.info(logs)],
-            on_epoch_end=lambda epoch, logs: [LOGGER.info('===> epoch {} ended'.format(epoch+1)), LOGGER.info(logs)])
+            on_epoch_end=lambda epoch, logs: [LOGGER.info('===> epoch {} ended'.format(epoch+1)),
+                                              LOGGER.info(logs)])
 
         if self.run_fit:
             self.model.fit(self.X_train, self.y_train,
