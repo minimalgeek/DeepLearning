@@ -105,7 +105,7 @@ class Model:
         self.X_train, self.X_test, self.y_train, self.y_test, self.test_returns = self._prepare_data_for_fit()
 
         batch_print_callback = LambdaCallback(
-            on_epoch_end=lambda epoch, logs: [LOGGER.info('===> epoch {} ended'.format(epoch+1)),
+            on_epoch_end=lambda epoch, logs: [LOGGER.info('===> epoch {} ended'.format(epoch + 1)),
                                               LOGGER.info(logs)])
 
         if self.run_fit:
@@ -164,13 +164,14 @@ class ModelEvaluator:
 
         real_ups = self.model.y_test[:, 0] == 1
         real_downs = self.model.y_test[:, 1] == 1
+
         LOGGER.info('Real ups count')
         LOGGER.info(pd.value_counts(real_ups[predicted_ups]))
         LOGGER.info('Real downs count')
         LOGGER.info(pd.value_counts(real_downs[predicted_downs]))
 
         real_returns = np.append(self.model.test_returns[predicted_ups],
-                                      (-1 * self.model.test_returns[predicted_downs]))
+                                 (-1 * self.model.test_returns[predicted_downs]))
 
         LOGGER.info('===\nStrategy returns\n===')
         self.print_returns_distribution(real_returns)
