@@ -4,6 +4,7 @@ from flask import jsonify
 from datetime import datetime
 from werkzeug.routing import BaseConverter, ValidationError
 import logging
+import nasdaqpredictor
 from nasdaqpredictor.model import Model
 from nasdaqpredictor.dataloader import DataTransformer, DataLoader
 
@@ -46,4 +47,4 @@ def predict(ticker, selected_date):
 if __name__ == '__main__':
     model.build_model_data()
     model.build_neural_net()
-    app.run(port=5000, host='0.0.0.0')
+    app.run(port=80, host='0.0.0.0')
