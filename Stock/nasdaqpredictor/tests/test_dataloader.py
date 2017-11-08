@@ -20,6 +20,13 @@ def transformer(loader):
     return DataTransformer(loader)
 
 
+@pytest.fixture
+def small_transformer():
+    return DataTransformer(DataLoader('/nasdaq_tickers_small.csv',
+                                      datetime(2000, 1, 1),
+                                      datetime(2017, 1, 1)))
+
+
 def test_data_path():
     assert nasdaqpredictor.DATA_PATH is not None
     assert os.path.isdir(nasdaqpredictor.DATA_PATH)
@@ -53,7 +60,7 @@ def test_transformer_init(transformer: DataTransformer):
 
 
 @pytest.mark.long
-def test_shift(transformer: DataTransformer):
-    transformer.transform()
-    assert len(transformer.transformed_data_dict) == 139
-    assert transformer.transformed_data_dict['AAL'].shape == (2801, 61)
+def test_shift(small_transformer: DataTransformer):
+    small_transformer.transform()
+    assert len(small_transformer.transformed_data_dict) == 5
+    assert small_transformer.transformed_data_dict['AAL'].shape == (2801, 61)

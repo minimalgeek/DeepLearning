@@ -82,13 +82,12 @@ class DataTransformer:
         self.data_loader: DataLoader = data_loader
         self.max_shift = max_shift
         self.return_shift_days = return_shift_days
-
-        if self.data_loader.original_data_dict is None:
-            self.data_loader.reload_all()
-
-        self.transformed_data_dict = {}
+        self.transformed_data_dict = None
 
     def transform(self):
+        self.transformed_data_dict = {}
+        self.data_loader.reload_all()
+
         for ticker, data in self.data_loader.original_data_dict.items():
             for step in self.steps():
                 try:

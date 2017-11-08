@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import logging
 
+from datetime import datetime
 from keras.models import Sequential
 from keras.layers import Activation, Dense, LeakyReLU, Dropout, BatchNormalization
 from keras.losses import mean_squared_error, binary_crossentropy
@@ -26,43 +27,44 @@ LOGGER = logging.getLogger(__name__)
 class Model:
     def __init__(self,
                  transformer: DataTransformer,
+                 run_fit=True,
                  test_size=0.05,
                  neurons_per_layer=150,
                  extra_layers=4,
                  epochs=500,
                  batch_size=512,
-                 learning_rate=0.001,
-                 run_fit=True):
+                 learning_rate=0.001):
         self.transformer = transformer
+        self.run_fit = run_fit
         self.test_size = test_size
         self.neurons_per_layer = neurons_per_layer
         self.extra_layers = extra_layers  # beyond the first hidden layer
         self.epochs = epochs
         self.batch_size = batch_size
         self.learning_rate = learning_rate
-        self.run_fit = run_fit
 
-        if self.transformer.transformed_data_dict is None:
-            self.transformer.transform()
         self.data = defaultdict(lambda: {})
 
     def build_model_data(self):
-        LOGGER.info('Build model data for training')
+        LOGGER.info('Build model data')
+        self.transformer.transform()
+
         for ticker, data in self.transformer.transformed_data_dict.items():
             self._build_model_data_for_ticker(data, ticker)
+
+        self._summarize_and_scale_data()
 
     def _build_model_data_for_ticker(self, data, ticker):
         self.data[ticker]['X'] = data.drop('Return', axis=1)
         y = data['Return'] > 0
         y = np.expand_dims(y, axis=1)
         self.data[ticker]['y'] = np.hstack((y, 1 - y))
+
         X_train, X_test, y_train, y_test = train_test_split(self.data[ticker]['X'],
                                                             self.data[ticker]['y'],
                                                             test_size=self.test_size,
                                                             shuffle=False)
-        scaler = StandardScaler()
-        X_train = scaler.fit_transform(X_train)
-        X_test = scaler.transform(X_test)
+
         self.data[ticker]['X_train'] = X_train
         self.data[ticker]['X_test'] = X_test
         self.data[ticker]['y_train'] = y_train
@@ -74,59 +76,72 @@ class Model:
             self.data_width = X_train.shape[1]
 
     def build_neural_net(self):
-        LOGGER.info('Build neural network architecture')
-        model = Sequential()
+        if self.run_fit:
+            LOGGER.info('Build neural network architecture')
+            model = Sequential()
 
-        model.add(Dense(self.neurons_per_layer, input_dim=self.data_width, kernel_initializer='uniform'))
-        model.add(BatchNormalization())
-        model.add(Activation('relu'))
-        model.add(Dropout(0.2))
-
-        for _ in range(self.extra_layers):
-            model.add(Dense(self.neurons_per_layer, kernel_initializer='uniform'))
+            model.add(Dense(self.neurons_per_layer, input_dim=self.data_width, kernel_initializer='uniform'))
             model.add(BatchNormalization())
             model.add(Activation('relu'))
             model.add(Dropout(0.2))
 
-        model.add(Dense(2, kernel_initializer='uniform'))
-        model.add(Activation('softmax'))
+            for _ in range(self.extra_layers):
+                model.add(Dense(self.neurons_per_layer, kernel_initializer='uniform'))
+                model.add(BatchNormalization())
+                model.add(Activation('relu'))
+                model.add(Dropout(0.2))
 
-        model.compile(optimizer=Adam(lr=self.learning_rate),
-                      loss='categorical_crossentropy',
-                      metrics=['accuracy'])
+            model.add(Dense(2, kernel_initializer='uniform'))
+            model.add(Activation('softmax'))
 
-        self.model = model
-        LOGGER.info('Architecture: ')
-        model.summary(print_fn=LOGGER.info)
+            model.compile(optimizer=Adam(lr=self.learning_rate),
+                          loss='categorical_crossentropy',
+                          metrics=['accuracy'])
 
-    def fit_neural_net(self):
+            self.model = model
+            LOGGER.info('Architecture: ')
+            model.summary(print_fn=LOGGER.info)
+
+            self._fit_neural_net()
+        else:
+            LOGGER.info('Load neural net from filepath: {}'.format(FILEPATH))
+            self.model = load_model(FILEPATH)
+
+    def _fit_neural_net(self):
         LOGGER.info('Train neural network')
-
-        self.X_train, self.X_test, self.y_train, self.y_test, self.test_returns = self._prepare_data_for_fit()
 
         batch_print_callback = LambdaCallback(
             on_epoch_end=lambda epoch, logs: [LOGGER.info('===> epoch {} ended'.format(epoch + 1)),
                                               LOGGER.info(logs)])
 
-        if self.run_fit:
-            self.model.fit(self.X_train, self.y_train,
-                           validation_data=(self.X_test, self.y_test),
-                           epochs=self.epochs,
-                           batch_size=self.batch_size,
-                           verbose=2,
-                           callbacks=[batch_print_callback])
-            self.model.save(FILEPATH)
-        else:
-            self.model = load_model(FILEPATH)
+        self.model.fit(self.X_train, self.y_train,
+                       validation_data=(self.X_test, self.y_test),
+                       epochs=self.epochs,
+                       batch_size=self.batch_size,
+                       verbose=2,
+                       callbacks=[batch_print_callback])
+        self.model.save(FILEPATH)
 
         score = self.model.evaluate(self.X_test, self.y_test)
         LOGGER.info('Test loss: {}, Test accuracy: {}'.format(score[0], score[1]))
 
     def predict(self, X_test):
+        """
+        Predict from an array
+        :param X_test: Input, should be already scaled
+        :return: prediction
+        """
         predicted = self.model.predict(X_test)
         return predicted
 
-    def _prepare_data_for_fit(self):
+    def predict_one(self, ticker, date_to_predict:datetime):
+        X_test = self.data[ticker]['X'].loc[date_to_predict.strftime('%Y-%m-%d')]
+        X_test_to_network = np.expand_dims(X_test, axis=0)
+        X_test_transformed = self.scaler.transform(X_test_to_network)
+        predicted = self.model.predict(X_test_transformed)
+        return predicted
+
+    def _summarize_and_scale_data(self):
         X_train = []
         X_test = []
         y_train = []
@@ -140,10 +155,13 @@ class Model:
             test_returns.append(datas['test_returns'])
         X_train = np.concatenate(X_train)
         X_test = np.concatenate(X_test)
-        y_train = np.concatenate(y_train)
-        y_test = np.concatenate(y_test)
-        test_returns = np.concatenate(test_returns)
-        return X_train, X_test, y_train, y_test, test_returns
+        self.y_train = np.concatenate(y_train)
+        self.y_test = np.concatenate(y_test)
+        self.test_returns = np.concatenate(test_returns)
+
+        self.scaler = StandardScaler()
+        self.X_train = self.scaler.fit_transform(X_train)
+        self.X_test = self.scaler.transform(X_test)
 
 
 class ModelEvaluator:
