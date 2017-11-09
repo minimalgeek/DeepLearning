@@ -28,7 +28,7 @@ class Model:
     def __init__(self,
                  transformer: DataTransformer,
                  run_fit=True,
-                 test_size=0.05,
+                 test_date: datetime = datetime(2014, 1, 1),
                  neurons_per_layer=150,
                  extra_layers=4,
                  epochs=500,
@@ -36,7 +36,7 @@ class Model:
                  learning_rate=0.001):
         self.transformer = transformer
         self.run_fit = run_fit
-        self.test_size = test_size
+        self.test_date = test_date.strftime('%Y-%m-%d')
         self.neurons_per_layer = neurons_per_layer
         self.extra_layers = extra_layers  # beyond the first hidden layer
         self.epochs = epochs
@@ -55,25 +55,30 @@ class Model:
         self._summarize_and_scale_data()
 
     def _build_model_data_for_ticker(self, data, ticker):
-        self.data[ticker]['X'] = data.drop('Return', axis=1)
-        y = data['Return'] > 0
-        y = np.expand_dims(y, axis=1)
-        self.data[ticker]['y'] = np.hstack((y, 1 - y))
+        X = data.drop('Return', axis=1)
+        y = data['Return']
+        self.data[ticker]['X'] = X  # store this, we may need it in future predictions
 
-        X_train, X_test, y_train, y_test = train_test_split(self.data[ticker]['X'],
-                                                            self.data[ticker]['y'],
-                                                            test_size=self.test_size,
-                                                            shuffle=False)
+        X_train = X[:self.test_date]
+        X_test = X[self.test_date:]
+        y_train = y[:self.test_date]
+        y_test = y[self.test_date:]
 
         self.data[ticker]['X_train'] = X_train
         self.data[ticker]['X_test'] = X_test
-        self.data[ticker]['y_train'] = y_train
-        self.data[ticker]['y_test'] = y_test
-        self.data[ticker]['train_returns'] = data['Return'][:len(y_train)]
-        self.data[ticker]['test_returns'] = data['Return'][len(y_train):]
+        self.data[ticker]['y_train'] = Model.series_to_binarized_columns(y_train)
+        self.data[ticker]['y_test'] = Model.series_to_binarized_columns(y_test)
+        self.data[ticker]['train_returns'] = y_train
+        self.data[ticker]['test_returns'] = y_test
 
         if not hasattr(self, 'data_width'):
             self.data_width = X_train.shape[1]
+
+    def series_to_binarized_columns(y):
+        y = y > 0
+        y = np.expand_dims(y, axis=1)
+        y = np.hstack((y, 1 - y))
+        return y
 
     def build_neural_net(self):
         if self.run_fit:
@@ -134,7 +139,7 @@ class Model:
         predicted = self.model.predict(X_test)
         return predicted
 
-    def predict_one(self, ticker, date_to_predict:datetime):
+    def predict_one(self, ticker, date_to_predict: datetime):
         X_test = self.data[ticker]['X'].loc[date_to_predict.strftime('%Y-%m-%d')]
         X_test_to_network = np.expand_dims(X_test, axis=0)
         X_test_transformed = self.scaler.transform(X_test_to_network)
@@ -167,18 +172,15 @@ class Model:
 class ModelEvaluator:
     def __init__(self,
                  model: Model,
-                 certainty_multiplier=0.999):
+                 certainty=0.6):
         self.model = model
-        self.certainty_multiplier = certainty_multiplier
+        self.certainty = certainty
 
     def evaluate(self):
         predicted = self.model.predict(self.model.X_test)
 
-        certainty_percentage = predicted.max() * self.certainty_multiplier
-        LOGGER.info('Certainty is {}%'.format(certainty_percentage))
-
-        predicted_ups = predicted[:, 0] > certainty_percentage
-        predicted_downs = predicted[:, 1] > certainty_percentage
+        predicted_ups = predicted[:, 0] > self.certainty
+        predicted_downs = predicted[:, 1] > self.certainty
 
         real_ups = self.model.y_test[:, 0] == 1
         real_downs = self.model.y_test[:, 1] == 1

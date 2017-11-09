@@ -9,17 +9,16 @@ if __name__ == '__main__':
                         datetime(2017, 1, 1))
     transformer = DataTransformer(loader)
     model = Model(transformer,
-                  test_size=0.1,
+                  test_date=datetime(2014, 1, 1),
                   learning_rate=0.001,
-                  extra_layers=5,
-                  neurons_per_layer=100,
-                  batch_size=1024,
-                  epochs=200,
-                  run_fit=False)
+                  extra_layers=8,
+                  neurons_per_layer=50,
+                  batch_size=2048,
+                  epochs=100,
+                  run_fit=True)
 
     model.build_model_data()
     model.build_neural_net()
 
-    model_evaluator = ModelEvaluator(model,
-                                     certainty_multiplier=0.8)
+    model_evaluator = ModelEvaluator(model, certainty=0.7)
     model_evaluator.evaluate()

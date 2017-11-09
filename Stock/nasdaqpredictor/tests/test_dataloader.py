@@ -59,7 +59,6 @@ def test_transformer_init(transformer: DataTransformer):
     assert transformer.data_loader is not None
 
 
-@pytest.mark.long
 def test_shift(small_transformer: DataTransformer):
     small_transformer.transform()
     assert len(small_transformer.transformed_data_dict) == 5

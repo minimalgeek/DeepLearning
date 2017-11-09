@@ -29,9 +29,9 @@ class DataLoader:
     def reload_all(self):
         self.original_data_dict = defaultdict(lambda: None)
         self._attempt_count = 0
-        self._load_for_tickers(self.all_tickers.ticker)
+        self.load_for_tickers(self.all_tickers.ticker)
 
-    def _load_for_tickers(self, tickers):
+    def load_for_tickers(self, tickers):
         LOGGER.info('Load tickers')
 
         skipped_tickers = []
@@ -50,7 +50,7 @@ class DataLoader:
         if len(skipped_tickers) > 0 and self._attempt_count < DataLoader.MAX_DOWNLOAD_ATTEMPT:
             self._attempt_count += 1
             LOGGER.info('Retry ({}) for skipped tickers: {}'.format(self._attempt_count, str(skipped_tickers)))
-            self._load_for_tickers(skipped_tickers)
+            self.load_for_tickers(skipped_tickers)
 
     def construct_file_name(self, ticker):
         return '{}__{}__{}.csv'.format(ticker,
@@ -96,6 +96,8 @@ class DataTransformer:
                     LOGGER.error(e)
 
             self.transformed_data_dict[ticker] = data
+        # We no longer need this
+        self.data_loader.original_data_dict = None
 
     def steps(self):
         yield self._set_index_column_if_necessary
