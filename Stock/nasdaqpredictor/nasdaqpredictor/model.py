@@ -104,13 +104,13 @@ class Model:
                           metrics=['accuracy'])
 
             self.model = model
-            LOGGER.info('Architecture: ')
-            model.summary(print_fn=LOGGER.info)
-
             self._fit_neural_net()
         else:
             LOGGER.info('Load neural net from filepath: {}'.format(FILEPATH))
             self.model = load_model(FILEPATH)
+
+        LOGGER.info('Architecture: ')
+        self.model.summary(print_fn=LOGGER.info)
 
     def _fit_neural_net(self):
         LOGGER.info('Train neural network')
