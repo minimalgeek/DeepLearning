@@ -1,25 +1,20 @@
 import numpy as np
 import pandas as pd
 import logging
+import os
 
 from datetime import datetime
 from keras.models import Sequential
 from keras.layers import Activation, Dense, LeakyReLU, Dropout, BatchNormalization
-from keras.losses import mean_squared_error, binary_crossentropy
-from keras.optimizers import Adam, RMSprop
-from keras import metrics
-from keras import regularizers
+from keras.optimizers import Adam
 from keras.callbacks import LambdaCallback
 from keras.models import load_model
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import confusion_matrix, classification_report
-from sklearn.model_selection import train_test_split
 
 from dataloader import DataTransformer
 from collections import defaultdict
-
-FILEPATH = 'full_model.hdf5'
 
 LOGGER = logging.getLogger(__name__)
 
@@ -27,17 +22,25 @@ LOGGER = logging.getLogger(__name__)
 class Model:
     def __init__(self,
                  transformer: DataTransformer,
-                 run_fit=True,
+                 file_path=None,
                  test_date: datetime = datetime(2014, 1, 1),
                  neurons_per_layer=150,
+                 dropout=0.2,
                  extra_layers=4,
                  epochs=500,
                  batch_size=512,
                  learning_rate=0.001):
         self.transformer = transformer
-        self.run_fit = run_fit
+        if file_path is None:
+            now = datetime.now().strftime('%Y_%m_%d_%H_%M')
+            self.file_path = os.path.join('models', 'full_model_' + now + '.hdf5')
+            self.run_fit = True
+        else:
+            self.file_path = file_path
+            self.run_fit = False
         self.test_date = test_date.strftime('%Y-%m-%d')
         self.neurons_per_layer = neurons_per_layer
+        self.dropout = dropout
         self.extra_layers = extra_layers  # beyond the first hidden layer
         self.epochs = epochs
         self.batch_size = batch_size
@@ -88,13 +91,13 @@ class Model:
             model.add(Dense(self.neurons_per_layer, input_dim=self.data_width, kernel_initializer='uniform'))
             model.add(BatchNormalization())
             model.add(Activation('relu'))
-            model.add(Dropout(0.2))
+            model.add(Dropout(self.dropout))
 
             for _ in range(self.extra_layers):
                 model.add(Dense(self.neurons_per_layer, kernel_initializer='uniform'))
                 model.add(BatchNormalization())
-                model.add(Activation('relu'))
-                model.add(Dropout(0.2))
+                model.add(LeakyReLU(alpha=0.01))
+                model.add(Dropout(self.dropout))
 
             model.add(Dense(2, kernel_initializer='uniform'))
             model.add(Activation('softmax'))
@@ -105,9 +108,10 @@ class Model:
 
             self.model = model
             self._fit_neural_net()
+            self.model.save(self.file_path)
         else:
-            LOGGER.info('Load neural net from filepath: {}'.format(FILEPATH))
-            self.model = load_model(FILEPATH)
+            LOGGER.info('Load neural net from filepath: {}'.format(self.file_path))
+            self.model = load_model(self.file_path)
 
         LOGGER.info('Architecture: ')
         self.model.summary(print_fn=LOGGER.info)
@@ -125,8 +129,6 @@ class Model:
                        batch_size=self.batch_size,
                        verbose=2,
                        callbacks=[batch_print_callback])
-        self.model.save(FILEPATH)
-
         score = self.model.evaluate(self.X_test, self.y_test)
         LOGGER.info('Test loss: {}, Test accuracy: {}'.format(score[0], score[1]))
 
@@ -137,6 +139,10 @@ class Model:
         :return: prediction
         """
         predicted = self.model.predict(X_test)
+        return predicted
+
+    def predict_classes(self, X_test):
+        predicted = self.model.predict_classes(X_test)
         return predicted
 
     def predict_one(self, ticker, date_to_predict: datetime):
@@ -198,6 +204,10 @@ class ModelEvaluator:
 
         LOGGER.info('===\nAll returns\n===')
         self.print_returns_distribution(self.model.test_returns)
+
+    def evaluate_report(self):
+        predicted = self.model.predict_classes(self.model.X_test)
+        LOGGER.info(classification_report(self.model.y_test[:, 0], predicted))
 
     def print_returns_distribution(self, returns):
         neg = np.sum(returns[returns < 0])
