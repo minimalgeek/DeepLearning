@@ -48,9 +48,14 @@ if __name__ == '__main__':
                         datetime(2000, 1, 1),
                         datetime(2017, 1, 1))
     transformer = DataTransformer(loader)
-    mod = Model(transformer,
-                epochs=1,
-                test_date=datetime(2014, 1, 1),
-                run_fit=False)
-    exporter = PredictionExporter(model=mod)
+    model = Model(transformer,
+                  file_path='models/full_model_2017_11_13_13_25.hdf5',
+                  test_date=datetime(2014, 1, 1),
+                  learning_rate=0.0001,
+                  extra_layers=15,
+                  neurons_per_layer=70,
+                  dropout=0.1,
+                  batch_size=1024,
+                  epochs=200)
+    exporter = PredictionExporter(model=model)
     exporter.export_to_csv()
