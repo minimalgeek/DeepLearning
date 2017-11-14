@@ -50,7 +50,8 @@ class Model:
 
     def build_model_data(self):
         LOGGER.info('Build model data')
-        self.transformer.transform()
+        if self.transformer.transformed_data_dict is None:
+            self.transformer.transform()
 
         for ticker, data in self.transformer.transformed_data_dict.items():
             self._build_model_data_for_ticker(data, ticker)
