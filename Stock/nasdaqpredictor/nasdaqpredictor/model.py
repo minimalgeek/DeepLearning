@@ -89,15 +89,15 @@ class Model:
             LOGGER.info('Build neural network architecture')
             model = Sequential()
 
-            model.add(Dense(self.neurons_per_layer, input_dim=self.data_width, kernel_initializer='uniform'))
+            model.add(Dense(self.neurons_per_layer, input_dim=self.data_width, kernel_initializer='glorot_uniform'))
             model.add(BatchNormalization())
             model.add(Activation('relu'))
             model.add(Dropout(self.dropout))
 
             for _ in range(self.extra_layers):
-                model.add(Dense(self.neurons_per_layer, kernel_initializer='uniform'))
+                model.add(Dense(self.neurons_per_layer, kernel_initializer='glorot_uniform'))
                 model.add(BatchNormalization())
-                model.add(LeakyReLU(alpha=0.01))
+                model.add(Activation('relu'))
                 model.add(Dropout(self.dropout))
 
             model.add(Dense(2, kernel_initializer='uniform'))
