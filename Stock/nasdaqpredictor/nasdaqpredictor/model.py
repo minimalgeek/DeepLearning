@@ -202,6 +202,7 @@ class ModelEvaluator:
 
         LOGGER.info('===\nStrategy returns\n===')
         self.print_returns_distribution(real_returns)
+        self.display_returns(real_returns)
 
         LOGGER.info('===\nAll returns\n===')
         self.print_returns_distribution(self.model.test_returns)
@@ -217,3 +218,8 @@ class ModelEvaluator:
         LOGGER.info('Positive returns: ' + str(pos))
         LOGGER.info('Pos/Neg ratio: ' + str(pos / (neg * -1)))
         LOGGER.info('Sum of returns: ' + str(np.sum(returns)))
+
+    def display_returns(self, returns):
+        import seaborn as sns
+        plot = sns.tsplot(returns)
+        plot.get_figure().savefig(self.model.file_path + '.png')
