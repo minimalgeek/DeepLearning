@@ -58,19 +58,19 @@ if __name__ == '__main__':
     transformer = DataTransformer(loader, return_shift_days=-3)
 
     model = Model(transformer,
-                  #file_path='models/full_model_2017_11_16_15_02.hdf5',
+                  #file_path='models/full_model_2017_11_16_16_36.hdf5',
                   test_date=datetime(2015, 1, 1),
                   learning_rate=1e-3,
-                  extra_layers=20,
+                  extra_layers=10,
                   neurons_per_layer=20,
                   dropout=0.1,
-                  batch_size=1024,
-                  epochs=100)
+                  batch_size=4096,
+                  epochs=200)
 
     model.build_model_data()
     model.build_neural_net()
 
-    model_evaluator = ModelEvaluator(model, certainty=0.7)
+    model_evaluator = ModelEvaluator(model, certainty=0.6)
     model_evaluator.evaluate()
 
     # grid_search()
