@@ -47,9 +47,9 @@ if __name__ == '__main__':
     loader = DataLoader('/nasdaq_tickers.csv',
                         datetime(2000, 1, 1),
                         datetime(2017, 1, 1))
-    transformer = DataTransformer(loader)
+    transformer = DataTransformer(loader, return_shift_days=-3)
     model = Model(transformer,
-                  file_path='models/full_model_2017_11_15_15_52.hdf5',
+                  file_path='models/full_model_2017_11_16_11_42.hdf5',
                   test_date=datetime(2015, 1, 1),
                   learning_rate=1e-3,
                   extra_layers=15,
