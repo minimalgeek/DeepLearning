@@ -128,10 +128,10 @@ class Model:
                        validation_data=(self.X_test, self.y_test),
                        epochs=self.epochs,
                        batch_size=self.batch_size,
-                       verbose=2,
+                       verbose=3,
                        callbacks=[batch_print_callback])
-        score = self.model.evaluate(self.X_test, self.y_test)
-        LOGGER.info('Test loss: {}, Test accuracy: {}'.format(score[0], score[1]))
+        # score = self.model.evaluate(self.X_test, self.y_test)
+        # LOGGER.info('Test loss: {}, Test accuracy: {}'.format(score[0], score[1]))
 
     def predict(self, X_test):
         """
