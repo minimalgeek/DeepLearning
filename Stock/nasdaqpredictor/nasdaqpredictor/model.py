@@ -183,7 +183,7 @@ class ModelEvaluator:
         self.model = model
         self.certainty = certainty
 
-    def evaluate(self):
+    def evaluate(self, export_image=False):
         predicted = self.model.predict(self.model.X_test)
 
         predicted_ups = predicted[:, 0] > self.certainty
@@ -202,7 +202,8 @@ class ModelEvaluator:
 
         LOGGER.info('===\nStrategy returns\n===')
         self.print_returns_distribution(real_returns)
-        self.display_returns(real_returns)
+        if export_image:
+            self.display_returns(real_returns)
 
         LOGGER.info('===\nAll returns\n===')
         self.print_returns_distribution(self.model.test_returns)
