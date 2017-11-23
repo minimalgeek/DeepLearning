@@ -55,23 +55,25 @@ if __name__ == '__main__':
     loader = DataLoader('/nasdaq_tickers.csv',
                         datetime(2000, 1, 1),
                         datetime(2017, 1, 1))
-    transformer = DataTransformer(loader, return_shift_days=-3)
+    transformer = DataTransformer(loader, return_shift_days=-2)
 
     model = Model(transformer,
-                  #file_path='models/full_model_2017_11_16_16_36.hdf5',
+                  file_path='models/full_model_2017_11_22_17_21.hdf5',
                   test_date=datetime(2015, 1, 1),
-                  learning_rate=1e-3,
-                  extra_layers=10,
-                  neurons_per_layer=20,
+                  learning_rate=1e-2,
+                  extra_layers=6,
+                  neurons_per_layer=200,
                   dropout=0.1,
-                  batch_size=4096,
-                  epochs=200)
+                  batch_size=2**14,
+                  epochs=100)
 
     model.build_model_data()
     model.build_neural_net()
 
-    model_evaluator = ModelEvaluator(model, certainty=0.6)
-    model_evaluator.evaluate()
+    for c in [0.51, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.9, 0.95]:
+        LOGGER.info('====================\nCeratinty: {}'.format(c))
+        model_evaluator = ModelEvaluator(model, certainty=c)
+        model_evaluator.evaluate()
 
-    # grid_search()
-    # evaluate_all_models()
+        # grid_search()
+        # evaluate_all_models()

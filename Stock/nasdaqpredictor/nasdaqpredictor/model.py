@@ -12,6 +12,7 @@ from keras.models import load_model
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import confusion_matrix, classification_report
+from sklearn.preprocessing import LabelBinarizer
 
 from dataloader import DataTransformer
 from collections import defaultdict
@@ -29,7 +30,8 @@ class Model:
                  extra_layers=4,
                  epochs=500,
                  batch_size=512,
-                 learning_rate=0.001):
+                 learning_rate=0.001,
+                 extremes=5):
         self.transformer = transformer
         if file_path is None:
             now = datetime.now().strftime('%Y_%m_%d_%H_%M')
@@ -45,6 +47,7 @@ class Model:
         self.epochs = epochs
         self.batch_size = batch_size
         self.learning_rate = learning_rate
+        self.extremes = extremes
 
         self.data = defaultdict(lambda: {})
 
@@ -70,15 +73,20 @@ class Model:
 
         self.data[ticker]['X_train'] = X_train
         self.data[ticker]['X_test'] = X_test
-        self.data[ticker]['y_train'] = Model.series_to_binarized_columns(y_train)
-        self.data[ticker]['y_test'] = Model.series_to_binarized_columns(y_test)
+        self.data[ticker]['y_train'] = self.series_to_binarized_columns(y_train)
+        self.data[ticker]['y_test'] = self.series_to_binarized_columns(y_test)
         self.data[ticker]['train_returns'] = y_train
         self.data[ticker]['test_returns'] = y_test
 
         if not hasattr(self, 'data_width'):
             self.data_width = X_train.shape[1]
 
-    def series_to_binarized_columns(y):
+    def series_to_binarized_columns(self, y):
+        # pos = y > self.extremes
+        # neg = y < -self.extremes
+        # meds = (y > -self.extremes) & (y < self.extremes)
+        # y = np.hstack((neg,meds,pos))
+        # return y
         y = y > 0
         y = np.expand_dims(y, axis=1)
         y = np.hstack((y, 1 - y))
@@ -128,10 +136,10 @@ class Model:
                        validation_data=(self.X_test, self.y_test),
                        epochs=self.epochs,
                        batch_size=self.batch_size,
-                       verbose=2,
+                       verbose=3,
                        callbacks=[batch_print_callback])
-        score = self.model.evaluate(self.X_test, self.y_test)
-        LOGGER.info('Test loss: {}, Test accuracy: {}'.format(score[0], score[1]))
+        # score = self.model.evaluate(self.X_test, self.y_test)
+        # LOGGER.info('Test loss: {}, Test accuracy: {}'.format(score[0], score[1]))
 
     def predict(self, X_test):
         """
@@ -183,7 +191,7 @@ class ModelEvaluator:
         self.model = model
         self.certainty = certainty
 
-    def evaluate(self):
+    def evaluate(self, export_image=False):
         predicted = self.model.predict(self.model.X_test)
 
         predicted_ups = predicted[:, 0] > self.certainty
@@ -202,7 +210,8 @@ class ModelEvaluator:
 
         LOGGER.info('===\nStrategy returns\n===')
         self.print_returns_distribution(real_returns)
-        self.display_returns(real_returns)
+        if export_image:
+            self.display_returns(real_returns)
 
         LOGGER.info('===\nAll returns\n===')
         self.print_returns_distribution(self.model.test_returns)

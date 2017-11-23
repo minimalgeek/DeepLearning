@@ -1,0 +1,21 @@
+version: '3'
+services:
+  base:
+    build: ./base
+    image: base:1.0
+  predictor:
+    build: ./predictor
+    ports:
+      - 5001:5000
+    depends_on:
+      - base
+      - mongo
+  mongo:
+    image: mongo
+    ports:
+      - 27017:27017
+    volumes:
+      - mongo-data:/data/db
+
+volumes:
+  mongo-data:
