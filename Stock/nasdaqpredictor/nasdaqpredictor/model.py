@@ -140,9 +140,9 @@ class Model:
                 )
             return K.categorical_crossentropy(y_pred, y_true) * final_mask
 
-        weight_matrix = np.array([[0.5,  6,  8],
-                                  [2,  1,  2],
-                                  [8,  6,  0.5]]).astype(np.float64)
+        weight_matrix = np.array([[0.5,  6,  15],
+                                  [2,    1,  2],
+                                  [15,   6,  0.5]]).astype(np.float64)
         wcce = partial(w_categorical_crossentropy, weights=weight_matrix)
         wcce.__name__ = 'w_categorical_crossentropy'
         return wcce
@@ -214,26 +214,18 @@ class ModelEvaluator:
         self.certainty = certainty
 
     def evaluate(self, export_image=False):
-        predicted = self.model.predict(self.model.X_test)
-
-        # predicted_ups = predicted[:, 0] > self.certainty
-        # predicted_downs = predicted[:, 2] > self.certainty
-
-        predicted_arg = np.argmax(predicted, axis=1)
-
-        predicted_ups = np.all([predicted_arg == 0, predicted[:, 0] > self.certainty], axis=0)
-        predicted_downs = np.all([predicted_arg == 2, predicted[:, 2] > self.certainty], axis=0)
+        predicted = self.model.predict_classes(self.model.X_test)
 
         real_ups = self.model.y_test[:, 0]
         real_downs = self.model.y_test[:, 2]
 
         LOGGER.info('Real ups count')
-        LOGGER.info(pd.value_counts(real_ups[predicted_ups]))
+        LOGGER.info(pd.value_counts(real_ups[predicted == 0]))
         LOGGER.info('Real downs count')
-        LOGGER.info(pd.value_counts(real_downs[predicted_downs]))
+        LOGGER.info(pd.value_counts(real_downs[predicted == 2]))
 
-        real_returns = np.append(self.model.test_returns[predicted_ups],
-                                 (-1 * self.model.test_returns[predicted_downs]))
+        real_returns = np.append(self.model.test_returns[predicted == 0],
+                                 (-1 * self.model.test_returns[predicted == 2]))
 
         LOGGER.info('===\nStrategy returns\n===')
         self.print_returns_distribution(real_returns)
