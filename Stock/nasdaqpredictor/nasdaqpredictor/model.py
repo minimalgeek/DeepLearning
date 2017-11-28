@@ -119,7 +119,8 @@ class Model:
             self.model.save(self.file_path)
         else:
             LOGGER.info('Load neural net from filepath: {}'.format(self.file_path))
-            self.model = load_model(self.file_path)
+            self.model = load_model(self.file_path,
+                                    custom_objects={'w_categorical_crossentropy': self.create_entropy()})
 
         LOGGER.info('Architecture: ')
         self.model.summary(print_fn=LOGGER.info)
@@ -139,9 +140,9 @@ class Model:
                 )
             return K.categorical_crossentropy(y_pred, y_true) * final_mask
 
-        weight_matrix = np.array([[0,  8, 20],
-                                  [2,  1, 2],
-                                  [20, 8, 0]]).astype(np.float64)
+        weight_matrix = np.array([[0.5,  6,  8],
+                                  [2,  1,  2],
+                                  [8,  6,  0.5]]).astype(np.float64)
         wcce = partial(w_categorical_crossentropy, weights=weight_matrix)
         wcce.__name__ = 'w_categorical_crossentropy'
         return wcce
@@ -215,11 +216,16 @@ class ModelEvaluator:
     def evaluate(self, export_image=False):
         predicted = self.model.predict(self.model.X_test)
 
-        predicted_ups = predicted[:, 0] > self.certainty
-        predicted_downs = predicted[:, 2] > self.certainty
+        # predicted_ups = predicted[:, 0] > self.certainty
+        # predicted_downs = predicted[:, 2] > self.certainty
 
-        real_ups = self.model.y_test[:, 0] == 1
-        real_downs = self.model.y_test[:, 2] == 1
+        predicted_arg = np.argmax(predicted, axis=1)
+
+        predicted_ups = np.all([predicted_arg == 0, predicted[:, 0] > self.certainty], axis=0)
+        predicted_downs = np.all([predicted_arg == 2, predicted[:, 2] > self.certainty], axis=0)
+
+        real_ups = self.model.y_test[:, 0]
+        real_downs = self.model.y_test[:, 2]
 
         LOGGER.info('Real ups count')
         LOGGER.info(pd.value_counts(real_ups[predicted_ups]))

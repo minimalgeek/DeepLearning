@@ -35,7 +35,7 @@ def grid_search():
                 LOGGER.info(50 * '=')
                 LOGGER.info('layers: {}, neurons: {}, dropout: {}'.format(extras, neurons, dropout))
                 model = Model(transformer,
-                              # file_path='models/full_model_2017_11_13_14_56.hdf5',
+                              file_path='models/full_model_2017_11_28_16_05.hdf5',
                               test_date=datetime(2014, 1, 1),
                               learning_rate=0.001,
                               extra_layers=extras,
@@ -58,22 +58,22 @@ if __name__ == '__main__':
     transformer = DataTransformer(loader, return_shift_days=-3)
 
     model = Model(transformer,
-                  #file_path='models/full_model_2017_11_22_17_21.hdf5',
+                  #file_path='models/full_model_2017_11_28_15_39.hdf5',
                   test_date=datetime(2015, 1, 1),
                   learning_rate=1e-3,
                   extra_layers=10,
-                  neurons_per_layer=100,
-                  dropout=0.05,
-                  batch_size=2**12,
-                  epochs=100)
+                  neurons_per_layer=20,
+                  dropout=0.1,
+                  batch_size=2**14,
+                  epochs=50)
 
     model.build_model_data()
     model.build_neural_net()
 
-    for c in [0.5, 0.52, 0.54, 0.56, 0.6, 0.7]:
+    for c in [0.35 + x/100 for x in range(20)]:
         LOGGER.info('====================\nCeratinty: {}'.format(c))
         model_evaluator = ModelEvaluator(model, certainty=c)
         model_evaluator.evaluate()
 
-        # grid_search()
-        # evaluate_all_models()
+    # grid_search()
+    # evaluate_all_models()
