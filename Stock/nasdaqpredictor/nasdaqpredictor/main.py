@@ -58,20 +58,20 @@ if __name__ == '__main__':
     transformer = DataTransformer(loader, return_shift_days=-3)
 
     model = Model(transformer,
-                  file_path='models/full_model_2017_11_29_17_19.hdf5',
+                  file_path='models/good_results_500_epoch_2017_11_30.hdf5',
                   test_date=datetime(2015, 1, 1),
-                  learning_rate=1e-3,
+                  learning_rate=1e-2,
                   extra_layers=10,
-                  neurons_per_layer=80,
-                  dropout=0.05,
-                  batch_size=2**13,
-                  epochs=100,
+                  neurons_per_layer=100,
+                  dropout=0.1,
+                  batch_size=2**12,
+                  epochs=500,
                   extremes=5)
 
     model.build_model_data()
     model.build_neural_net()
 
-    for c in [0.34 + x/100 for x in range(16)]:
+    for c in [0.34 + x/100 for x in range(20)]:
         LOGGER.info('====================\nCeratinty: {}'.format(c))
         model_evaluator = ModelEvaluator(model, certainty=c)
         model_evaluator.evaluate()
