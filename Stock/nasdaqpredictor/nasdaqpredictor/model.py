@@ -5,11 +5,12 @@ import os
 
 from datetime import datetime
 from keras.models import Sequential
-from keras.layers import Activation, Dense, Dropout, BatchNormalization
+from keras.layers import Activation, Dense, Dropout, BatchNormalization, Flatten
 from keras.optimizers import Adam
 from keras.callbacks import LambdaCallback
 from keras.models import load_model
 import keras.backend as K
+from keras.layers import Conv1D, MaxPooling1D
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import confusion_matrix, classification_report
@@ -33,6 +34,7 @@ class Model:
                  epochs=500,
                  batch_size=512,
                  learning_rate=0.001,
+                 window=30,
                  extremes=5):
         self.transformer = transformer
         if file_path is None:
@@ -49,6 +51,7 @@ class Model:
         self.epochs = epochs
         self.batch_size = batch_size
         self.learning_rate = learning_rate
+        self.window = window
         self.extremes = extremes
 
         self.data = defaultdict(lambda: {})

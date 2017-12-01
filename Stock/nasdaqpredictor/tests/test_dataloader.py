@@ -35,7 +35,7 @@ def test_data_path():
 # Loader
 
 def test_loader_init(loader: DataLoader):
-    assert len(loader.all_tickers) == 139
+    assert len(loader.all_tickers) == 138
     assert loader.all_tickers.ticker.iloc[0] == 'AAL'
     assert loader.all_tickers.ticker.iloc[-1] == 'XRAY'
 
@@ -49,7 +49,7 @@ def test_construct_file_name(loader: DataLoader):
 
 def test_load_all(loader: DataLoader):
     loader.reload_all()
-    assert len(loader.original_data_dict.values()) == 139
+    assert len(loader.original_data_dict.values()) == 138
 
 
 # Transformer
@@ -62,4 +62,4 @@ def test_transformer_init(transformer: DataTransformer):
 def test_shift(small_transformer: DataTransformer):
     small_transformer.transform()
     assert len(small_transformer.transformed_data_dict) == 5
-    assert small_transformer.transformed_data_dict['AAL'].shape == (2801, 61)
+    assert small_transformer.transformed_data_dict['AAL'].shape == (2833, 9)

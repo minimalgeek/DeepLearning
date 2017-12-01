@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import pandas_datareader as pdr
 from datetime import datetime
@@ -77,10 +78,8 @@ class DataLoader:
 class DataTransformer:
     def __init__(self,
                  data_loader: DataLoader,
-                 max_shift: int = 30,
-                 return_shift_days: int = -5):
+                 return_shift_days: int = 3):
         self.data_loader: DataLoader = data_loader
-        self.max_shift = max_shift
         self.return_shift_days = return_shift_days
         self.transformed_data_dict = None
 
@@ -101,52 +100,28 @@ class DataTransformer:
 
     def steps(self):
         yield self._set_index_column_if_necessary
-        yield self._shift
-        yield self._add_bulls
-        yield self._add_gts
-        yield self._add_return
+        yield self._append_new_features
+        yield self._create_full_dataset
         yield self._clean_structure
-
-    def _clean_structure(self, data) -> pd.DataFrame:
-        data = data.drop(['Open', 'High', 'Low', 'Close'], axis=1, level=1)
-        data.columns = data.columns.droplevel()
-        data.dropna(inplace=True)
-        return data
-
-    def _add_return(self, data) -> pd.DataFrame:
-        shift_column = 'Shift ' + str(self.return_shift_days)
-
-        shifted = data.iloc[:, [0, 1, 2, 3]].shift(self.return_shift_days)
-        shifted.columns = pd.MultiIndex.from_product([[shift_column], ['Open', 'High', 'Low', 'Close']])
-        data = pd.concat([data, shifted], axis=1)
-        cls_5 = data[shift_column, 'Close']
-        cls = data['Shift 0', 'Close']
-        data['Shift 0', 'Return'] = 100 * (cls_5 - cls) / cls_5
-        return data
-
-    def _add_gts(self, data) -> pd.DataFrame:
-        for i in range(0, self.max_shift):
-            opn = data['Shift ' + str(i), 'Open']
-            prv_cls = data['Shift ' + str(i + 1), 'Close']
-            data['Shift ' + str(i), 'GT ' + str(i)] = 100 * (opn - prv_cls) / opn
-        return data
-
-    def _add_bulls(self, data) -> pd.DataFrame:
-        for i in range(0, self.max_shift):
-            cls = data['Shift ' + str(i), 'Close']
-            opn = data['Shift ' + str(i), 'Open']
-            data['Shift ' + str(i), 'Bull ' + str(i)] = 100 * (cls - opn) / cls
-        return data
-
-    def _shift(self, data) -> pd.DataFrame:
-        data.columns = pd.MultiIndex.from_product([['Shift 0'], ['Open', 'High', 'Low', 'Close']])
-        for i in range(1, self.max_shift + 1):
-            shifted = data.iloc[:, [0, 1, 2, 3]].shift(i)
-            shifted.columns = pd.MultiIndex.from_product([['Shift ' + str(i)], ['Open', 'High', 'Low', 'Close']])
-            data = pd.concat([data, shifted], axis=1)
-        return data
 
     def _set_index_column_if_necessary(self, data: pd.DataFrame) -> pd.DataFrame:
         if 'Date' in data.columns:
             data.set_index('Date', inplace=True)
         return data
+
+    def _append_new_features(self, data: pd.DataFrame) -> pd.DataFrame:
+        def feature(data, first_col, second_col, base_col):
+            return (data[first_col] - data[second_col]) / data[base_col]
+        data['OC diff'] = feature(data, 'Open', 'Close', 'Close')
+        data['HL diff'] = feature(data, 'High', 'Low', 'Close')
+        data['OL diff'] = feature(data, 'Open', 'Low', 'Close')
+        data['CH diff'] = feature(data, 'Close', 'High', 'Close')
+        data['Return'] = 100 * data['Close'].pct_change(self.return_shift_days).shift(-self.return_shift_days)
+        return data
+
+    def _create_full_dataset(self, data: pd.DataFrame) -> pd.DataFrame:
+        full = pd.concat((data.iloc[:, 0:4].pct_change(), data.iloc[:, 4:8], data['Return']), axis=1)
+        return full.iloc[self.return_shift_days:]
+
+    def _clean_structure(self, data) -> pd.DataFrame:
+        return data.replace([np.inf, -np.inf, np.NaN, np.NAN], 0.0)
