@@ -5,17 +5,19 @@ import os
 
 from datetime import datetime
 from keras.models import Sequential
-from keras.layers import Activation, Dense, LeakyReLU, Dropout, BatchNormalization
+from keras.layers import Activation, Dense, Dropout, BatchNormalization
 from keras.optimizers import Adam
 from keras.callbacks import LambdaCallback
 from keras.models import load_model
+import keras.backend as K
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import confusion_matrix, classification_report
-from sklearn.preprocessing import LabelBinarizer
 
 from dataloader import DataTransformer
 from collections import defaultdict
+from itertools import product
+from functools import partial
 
 LOGGER = logging.getLogger(__name__)
 
@@ -82,19 +84,16 @@ class Model:
             self.data_width = X_train.shape[1]
 
     def series_to_binarized_columns(self, y):
-        # pos = y > self.extremes
-        # neg = y < -self.extremes
-        # meds = (y > -self.extremes) & (y < self.extremes)
-        # y = np.hstack((neg,meds,pos))
-        # return y
-        y = y > 0
-        y = np.expand_dims(y, axis=1)
-        y = np.hstack((y, 1 - y))
+        pos = y > self.extremes
+        neg = y < -self.extremes
+        meds = (y > -self.extremes) & (y < self.extremes)
+        y = np.array([neg, meds, pos]).T
         return y
 
     def build_neural_net(self):
         if self.run_fit:
             LOGGER.info('Build neural network architecture')
+
             model = Sequential()
 
             model.add(Dense(self.neurons_per_layer, input_dim=self.data_width, kernel_initializer='glorot_uniform'))
@@ -108,10 +107,11 @@ class Model:
                 model.add(Activation('relu'))
                 model.add(Dropout(self.dropout))
 
-            model.add(Dense(2, kernel_initializer='uniform'))
+            model.add(Dense(3, kernel_initializer='uniform'))
             model.add(Activation('softmax'))
 
             model.compile(optimizer=Adam(lr=self.learning_rate),
+                          #loss=self.create_entropy(),
                           loss='categorical_crossentropy',
                           metrics=['accuracy'])
 
@@ -120,10 +120,33 @@ class Model:
             self.model.save(self.file_path)
         else:
             LOGGER.info('Load neural net from filepath: {}'.format(self.file_path))
-            self.model = load_model(self.file_path)
+            self.model = load_model(self.file_path,
+                                    custom_objects={'w_categorical_crossentropy': self.create_entropy()})
 
         LOGGER.info('Architecture: ')
         self.model.summary(print_fn=LOGGER.info)
+
+    def create_entropy(self):
+        def w_categorical_crossentropy(y_true, y_pred, weights):
+            nb_cl = len(weights)
+            final_mask = K.zeros_like(y_pred[:, 0])
+            y_pred_max = K.max(y_pred, axis=1)
+            y_pred_max = K.expand_dims(y_pred_max, 1)
+            y_pred_max_mat = K.equal(y_pred, y_pred_max)
+            for c_p, c_t in product(range(nb_cl), range(nb_cl)):
+                final_mask += (
+                    K.cast(weights[c_t, c_p], K.floatx()) *
+                    K.cast(y_pred_max_mat[:, c_p], K.floatx()) *
+                    K.cast(y_true[:, c_t], K.floatx())
+                )
+            return K.categorical_crossentropy(y_pred, y_true) * final_mask
+
+        weight_matrix = np.array([[0.1, 4, 7],
+                                  [2, 0.1, 2],
+                                  [7, 4, 0.1]]).astype(np.float64)
+        wcce = partial(w_categorical_crossentropy, weights=weight_matrix)
+        wcce.__name__ = 'w_categorical_crossentropy'
+        return wcce
 
     def _fit_neural_net(self):
         LOGGER.info('Train neural network')
@@ -194,11 +217,10 @@ class ModelEvaluator:
     def evaluate(self, export_image=False):
         predicted = self.model.predict(self.model.X_test)
 
-        predicted_ups = predicted[:, 0] > self.certainty
-        predicted_downs = predicted[:, 1] > self.certainty
-
-        real_ups = self.model.y_test[:, 0] == 1
-        real_downs = self.model.y_test[:, 1] == 1
+        real_ups = self.model.y_test[:, 0]
+        real_downs = self.model.y_test[:, 2]
+        predicted_ups = np.logical_and(predicted[:, 0] > self.certainty, predicted[:,0]>predicted[:,2])
+        predicted_downs = np.logical_and(predicted[:, 2] > self.certainty, predicted[:,2]>predicted[:,0])
 
         LOGGER.info('Real ups count')
         LOGGER.info(pd.value_counts(real_ups[predicted_ups]))
@@ -213,8 +235,8 @@ class ModelEvaluator:
         if export_image:
             self.display_returns(real_returns)
 
-        LOGGER.info('===\nAll returns\n===')
-        self.print_returns_distribution(self.model.test_returns)
+            # LOGGER.info('===\nAll returns\n===')
+            # self.print_returns_distribution(self.model.test_returns)
 
     def evaluate_report(self):
         predicted = self.model.predict_classes(self.model.X_test)
