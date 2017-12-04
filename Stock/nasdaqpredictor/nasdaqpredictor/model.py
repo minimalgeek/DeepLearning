@@ -10,7 +10,7 @@ from keras.optimizers import Adam
 from keras.callbacks import LambdaCallback
 from keras.models import load_model
 import keras.backend as K
-from keras.layers import Conv1D, MaxPooling1D
+from keras.layers import Conv1D, MaxPool1D
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import confusion_matrix, classification_report
@@ -67,24 +67,43 @@ class Model:
         self._summarize_and_scale_data()
 
     def _build_model_data_for_ticker(self, data, ticker):
-        X = data.drop('Return', axis=1)
-        y = data['Return']
-        self.data[ticker]['X'] = X  # store this, we may need it in future predictions
 
-        X_train = X[:self.test_date]
-        X_test = X[self.test_date:]
-        y_train = y[:self.test_date]
-        y_test = y[self.test_date:]
+        X_data = data.drop('Return', axis=1)
+        y_data = data['Return']
+
+        X_train = X_data[:self.test_date]
+        X_test = X_data[self.test_date:]
+        y_train = y_data[:self.test_date].iloc[self.window - 1:]
+        y_test = y_data[self.test_date:].iloc[self.window - 1:]
+
+        if len(X_test) == 0 or len(X_train) == 0:
+            return
+
+        scaler = StandardScaler()
+        X_train = scaler.fit_transform(X_train)
+        X_test = scaler.transform(X_test)
+        self.data[ticker]['scaler'] = scaler
+
+        def build_2D_input_data(input):
+            return [input[i:i + self.window] for i in range(0, input.shape[0] - self.window + 1)]
+
+        X_train = build_2D_input_data(X_train)
+        X_test = build_2D_input_data(X_test)
+
+        X_train = np.stack(X_train)
+        X_test = np.stack(X_test)
+
+        assert len(X_train) == len(y_train)
+        assert len(X_test) == len(y_test)
 
         self.data[ticker]['X_train'] = X_train
         self.data[ticker]['X_test'] = X_test
         self.data[ticker]['y_train'] = self.series_to_binarized_columns(y_train)
         self.data[ticker]['y_test'] = self.series_to_binarized_columns(y_test)
-        self.data[ticker]['train_returns'] = y_train
         self.data[ticker]['test_returns'] = y_test
 
-        if not hasattr(self, 'data_width'):
-            self.data_width = X_train.shape[1]
+        if not hasattr(self, 'data_shape'):
+            self.data_shape = X_train.shape[1:]
 
     def series_to_binarized_columns(self, y):
         pos = y > self.extremes
@@ -93,16 +112,50 @@ class Model:
         y = np.array([neg, meds, pos]).T
         return y
 
+    def _summarize_and_scale_data(self):
+        X_train = []
+        X_test = []
+        y_train = []
+        y_test = []
+        test_returns = []
+        for ticker, datas in self.data.items():
+            X_train.append(datas['X_train'])
+            X_test.append(datas['X_test'])
+            y_train.append(datas['y_train'])
+            y_test.append(datas['y_test'])
+            test_returns.append(datas['test_returns'])
+        self.X_train = np.concatenate(X_train)
+        self.X_test = np.concatenate(X_test)
+        self.y_train = np.concatenate(y_train)
+        self.y_test = np.concatenate(y_test)
+        self.test_returns = np.concatenate(test_returns)
+
     def build_neural_net(self):
         if self.run_fit:
             LOGGER.info('Build neural network architecture')
 
             model = Sequential()
 
-            model.add(Dense(self.neurons_per_layer, input_dim=self.data_width, kernel_initializer='glorot_uniform'))
-            model.add(BatchNormalization())
-            model.add(Activation('relu'))
-            model.add(Dropout(self.dropout))
+            model.add(
+                Conv1D(filters=32, kernel_size=3, padding='same', activation='relu', kernel_initializer='uniform',
+                       input_shape=self.data_shape))
+            model.add(
+                Conv1D(filters=32, kernel_size=3, padding='same', activation='relu', kernel_initializer='uniform'))
+            model.add(MaxPool1D(pool_size=2, padding='same'))
+
+            model.add(
+                Conv1D(filters=64, kernel_size=4, padding='same', activation='relu', kernel_initializer='uniform'))
+            model.add(
+                Conv1D(filters=64, kernel_size=4, padding='same', activation='relu', kernel_initializer='uniform'))
+            model.add(MaxPool1D(pool_size=2, padding='same'))
+
+            model.add(
+                Conv1D(filters=128, kernel_size=5, padding='same', activation='relu', kernel_initializer='uniform'))
+            model.add(
+                Conv1D(filters=128, kernel_size=5, padding='same', activation='relu', kernel_initializer='uniform'))
+            model.add(MaxPool1D(pool_size=2, padding='same'))
+
+            model.add(Flatten())
 
             for _ in range(self.extra_layers):
                 model.add(Dense(self.neurons_per_layer, kernel_initializer='glorot_uniform'))
@@ -110,11 +163,11 @@ class Model:
                 model.add(Activation('relu'))
                 model.add(Dropout(self.dropout))
 
-            model.add(Dense(3, kernel_initializer='uniform'))
+            model.add(Dense(3, kernel_initializer='glorot_uniform'))
             model.add(Activation('softmax'))
 
             model.compile(optimizer=Adam(lr=self.learning_rate),
-                          #loss=self.create_entropy(),
+                          # loss=self.create_entropy(),
                           loss='categorical_crossentropy',
                           metrics=['accuracy'])
 
@@ -138,9 +191,9 @@ class Model:
             y_pred_max_mat = K.equal(y_pred, y_pred_max)
             for c_p, c_t in product(range(nb_cl), range(nb_cl)):
                 final_mask += (
-                    K.cast(weights[c_t, c_p], K.floatx()) *
-                    K.cast(y_pred_max_mat[:, c_p], K.floatx()) *
-                    K.cast(y_true[:, c_t], K.floatx())
+                        K.cast(weights[c_t, c_p], K.floatx()) *
+                        K.cast(y_pred_max_mat[:, c_p], K.floatx()) *
+                        K.cast(y_true[:, c_t], K.floatx())
                 )
             return K.categorical_crossentropy(y_pred, y_true) * final_mask
 
@@ -164,8 +217,6 @@ class Model:
                        batch_size=self.batch_size,
                        verbose=3,
                        callbacks=[batch_print_callback])
-        # score = self.model.evaluate(self.X_test, self.y_test)
-        # LOGGER.info('Test loss: {}, Test accuracy: {}'.format(score[0], score[1]))
 
     def predict(self, X_test):
         """
@@ -187,43 +238,21 @@ class Model:
         predicted = self.model.predict(X_test_transformed)
         return predicted
 
-    def _summarize_and_scale_data(self):
-        X_train = []
-        X_test = []
-        y_train = []
-        y_test = []
-        test_returns = []
-        for ticker, datas in self.data.items():
-            X_train.append(datas['X_train'])
-            X_test.append(datas['X_test'])
-            y_train.append(datas['y_train'])
-            y_test.append(datas['y_test'])
-            test_returns.append(datas['test_returns'])
-        X_train = np.concatenate(X_train)
-        X_test = np.concatenate(X_test)
-        self.y_train = np.concatenate(y_train)
-        self.y_test = np.concatenate(y_test)
-        self.test_returns = np.concatenate(test_returns)
-
-        self.scaler = StandardScaler()
-        self.X_train = self.scaler.fit_transform(X_train)
-        self.X_test = self.scaler.transform(X_test)
-
 
 class ModelEvaluator:
     def __init__(self,
-                 model: Model,
-                 certainty=0.6):
+                 model: Model):
         self.model = model
-        self.certainty = certainty
+        LOGGER.info('===\nAll returns\n===')
+        self.print_returns_distribution(self.model.test_returns)
 
-    def evaluate(self, export_image=False):
+    def evaluate(self, export_image=False, certainty=0.34):
         predicted = self.model.predict(self.model.X_test)
 
         real_ups = self.model.y_test[:, 0]
         real_downs = self.model.y_test[:, 2]
-        predicted_ups = np.logical_and(predicted[:, 0] > self.certainty, predicted[:,0]>predicted[:,2])
-        predicted_downs = np.logical_and(predicted[:, 2] > self.certainty, predicted[:,2]>predicted[:,0])
+        predicted_ups = np.logical_and(predicted[:, 0] > certainty, predicted[:, 0] > predicted[:, 2])
+        predicted_downs = np.logical_and(predicted[:, 2] > certainty, predicted[:, 2] > predicted[:, 0])
 
         LOGGER.info('Real ups count')
         LOGGER.info(pd.value_counts(real_ups[predicted_ups]))
@@ -237,9 +266,6 @@ class ModelEvaluator:
         self.print_returns_distribution(real_returns)
         if export_image:
             self.display_returns(real_returns)
-
-            # LOGGER.info('===\nAll returns\n===')
-            # self.print_returns_distribution(self.model.test_returns)
 
     def evaluate_report(self):
         predicted = self.model.predict_classes(self.model.X_test)
