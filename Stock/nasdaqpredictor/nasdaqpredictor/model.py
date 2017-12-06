@@ -136,23 +136,14 @@ class Model:
 
             model = Sequential()
 
-            model.add(
-                Conv1D(filters=32, kernel_size=3, padding='same', activation='relu', kernel_initializer='uniform',
-                       input_shape=self.data_shape))
-            model.add(
-                Conv1D(filters=32, kernel_size=3, padding='same', activation='relu', kernel_initializer='uniform'))
+            model.add(Conv1D(filters=32, kernel_size=3, padding='same', activation='relu',
+                             input_shape=self.data_shape))
+            model.add(Conv1D(filters=64, kernel_size=4, padding='same', activation='relu'))
+            model.add(Dropout(self.dropout))
             model.add(MaxPool1D(pool_size=2, padding='same'))
-
-            model.add(
-                Conv1D(filters=64, kernel_size=4, padding='same', activation='relu', kernel_initializer='uniform'))
-            model.add(
-                Conv1D(filters=64, kernel_size=4, padding='same', activation='relu', kernel_initializer='uniform'))
-            model.add(MaxPool1D(pool_size=2, padding='same'))
-
-            model.add(
-                Conv1D(filters=128, kernel_size=5, padding='same', activation='relu', kernel_initializer='uniform'))
-            model.add(
-                Conv1D(filters=128, kernel_size=5, padding='same', activation='relu', kernel_initializer='uniform'))
+            model.add(Conv1D(filters=128, kernel_size=5, padding='same', activation='relu'))
+            model.add(Conv1D(filters=256, kernel_size=6, padding='same', activation='relu'))
+            model.add(Dropout(self.dropout))
             model.add(MaxPool1D(pool_size=2, padding='same'))
 
             model.add(Flatten())
@@ -167,7 +158,7 @@ class Model:
             model.add(Activation('softmax'))
 
             model.compile(optimizer=Adam(lr=self.learning_rate),
-                          # loss=self.create_entropy(),
+                          #loss=self.create_entropy(),
                           loss='categorical_crossentropy',
                           metrics=['accuracy'])
 
@@ -197,9 +188,9 @@ class Model:
                 )
             return K.categorical_crossentropy(y_pred, y_true) * final_mask
 
-        weight_matrix = np.array([[0.1, 4, 7],
+        weight_matrix = np.array([[0.1, 4, 8],
                                   [2, 0.1, 2],
-                                  [7, 4, 0.1]]).astype(np.float64)
+                                  [8, 4, 0.1]]).astype(np.float32)
         wcce = partial(w_categorical_crossentropy, weights=weight_matrix)
         wcce.__name__ = 'w_categorical_crossentropy'
         return wcce
@@ -251,8 +242,8 @@ class ModelEvaluator:
 
         real_ups = self.model.y_test[:, 0]
         real_downs = self.model.y_test[:, 2]
-        predicted_ups = np.logical_and(predicted[:, 0] > certainty, predicted[:, 0] > predicted[:, 2])
-        predicted_downs = np.logical_and(predicted[:, 2] > certainty, predicted[:, 2] > predicted[:, 0])
+        predicted_ups = (predicted[:, 0] > certainty) & (np.argmax(predicted, axis=1) == 0)
+        predicted_downs = (predicted[:, 2] > certainty) & (np.argmax(predicted, axis=1) == 2)
 
         LOGGER.info('Real ups count')
         LOGGER.info(pd.value_counts(real_ups[predicted_ups]))

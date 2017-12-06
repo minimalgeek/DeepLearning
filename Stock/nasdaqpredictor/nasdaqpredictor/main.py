@@ -14,14 +14,14 @@ if __name__ == '__main__':
     transformer = DataTransformer(loader, return_shift_days=3)
 
     model = Model(transformer,
-                  #file_path='models/good_results_500_epoch_2017_11_30.hdf5',
+                  #file_path='models/full_model_2017_12_06_11_19.hdf5',
                   test_date=datetime(2015, 1, 1),
-                  learning_rate=1e-1,
+                  learning_rate=1e-2,
                   extra_layers=3,
                   neurons_per_layer=40,
-                  dropout=0.2,
+                  dropout=0.4,
                   batch_size=2**12,
-                  epochs=200,
+                  epochs=100,
                   extremes=4)
 
     model.build_model_data()
