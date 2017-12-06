@@ -16,12 +16,12 @@ if __name__ == '__main__':
     model = Model(transformer,
                   #file_path='models/full_model_2017_12_06_11_19.hdf5',
                   test_date=datetime(2015, 1, 1),
-                  learning_rate=1e-2,
+                  learning_rate=1e-1,
                   extra_layers=3,
                   neurons_per_layer=40,
-                  dropout=0.4,
+                  dropout=0.3,
                   batch_size=2**12,
-                  epochs=100,
+                  epochs=10,
                   extremes=4)
 
     model.build_model_data()

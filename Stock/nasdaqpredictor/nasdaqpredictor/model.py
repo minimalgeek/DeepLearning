@@ -9,9 +9,9 @@ from keras.layers import Activation, Dense, Dropout, BatchNormalization, Flatten
 from keras.optimizers import Adam
 from keras.callbacks import LambdaCallback
 from keras.models import load_model
-import keras.backend as K
 from keras.layers import Conv1D, MaxPool1D
 
+from sklearn.utils import class_weight
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import confusion_matrix, classification_report
 
@@ -158,7 +158,6 @@ class Model:
             model.add(Activation('softmax'))
 
             model.compile(optimizer=Adam(lr=self.learning_rate),
-                          #loss=self.create_entropy(),
                           loss='categorical_crossentropy',
                           metrics=['accuracy'])
 
@@ -167,33 +166,10 @@ class Model:
             self.model.save(self.file_path)
         else:
             LOGGER.info('Load neural net from filepath: {}'.format(self.file_path))
-            self.model = load_model(self.file_path,
-                                    custom_objects={'w_categorical_crossentropy': self.create_entropy()})
+            self.model = load_model(self.file_path)
 
         LOGGER.info('Architecture: ')
         self.model.summary(print_fn=LOGGER.info)
-
-    def create_entropy(self):
-        def w_categorical_crossentropy(y_true, y_pred, weights):
-            nb_cl = len(weights)
-            final_mask = K.zeros_like(y_pred[:, 0])
-            y_pred_max = K.max(y_pred, axis=1)
-            y_pred_max = K.expand_dims(y_pred_max, 1)
-            y_pred_max_mat = K.equal(y_pred, y_pred_max)
-            for c_p, c_t in product(range(nb_cl), range(nb_cl)):
-                final_mask += (
-                        K.cast(weights[c_t, c_p], K.floatx()) *
-                        K.cast(y_pred_max_mat[:, c_p], K.floatx()) *
-                        K.cast(y_true[:, c_t], K.floatx())
-                )
-            return K.categorical_crossentropy(y_pred, y_true) * final_mask
-
-        weight_matrix = np.array([[0.1, 4, 8],
-                                  [2, 0.1, 2],
-                                  [8, 4, 0.1]]).astype(np.float32)
-        wcce = partial(w_categorical_crossentropy, weights=weight_matrix)
-        wcce.__name__ = 'w_categorical_crossentropy'
-        return wcce
 
     def _fit_neural_net(self):
         LOGGER.info('Train neural network')
@@ -202,11 +178,17 @@ class Model:
             on_epoch_end=lambda epoch, logs: [LOGGER.info('===> epoch {} ended'.format(epoch + 1)),
                                               LOGGER.info(logs)])
 
+        temp_y = np.argmax(self.y_train, axis=1)
+        cw = class_weight.compute_class_weight('balanced', np.unique(temp_y), temp_y)
+
+        LOGGER.info('Class weights: ' + str(cw))
+
         self.model.fit(self.X_train, self.y_train,
                        validation_data=(self.X_test, self.y_test),
                        epochs=self.epochs,
                        batch_size=self.batch_size,
-                       verbose=3,
+                       verbose=0,
+                       class_weight=cw,
                        callbacks=[batch_print_callback])
 
     def predict(self, X_test):
