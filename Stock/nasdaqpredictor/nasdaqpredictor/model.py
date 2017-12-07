@@ -136,17 +136,17 @@ class Model:
 
             model = Sequential()
 
-            model.add(Conv1D(filters=16, kernel_size=3, padding='same', activation='relu',
-                             input_shape=self.data_shape))
-            model.add(Conv1D(filters=32, kernel_size=4, padding='same', activation='relu'))
-            model.add(Dropout(self.dropout))
-            model.add(MaxPool1D(pool_size=2, padding='same'))
-            model.add(Conv1D(filters=64, kernel_size=5, padding='same', activation='relu'))
-            model.add(Conv1D(filters=128, kernel_size=6, padding='same', activation='relu'))
-            model.add(Dropout(self.dropout))
-            model.add(MaxPool1D(pool_size=2, padding='same'))
+            # model.add(Conv1D(filters=16, kernel_size=3, padding='same', activation='relu',
+            #                  input_shape=self.data_shape))
+            # model.add(Conv1D(filters=32, kernel_size=4, padding='same', activation='relu'))
+            # model.add(Dropout(self.dropout))
+            # model.add(MaxPool1D(pool_size=2, padding='same'))
+            # model.add(Conv1D(filters=64, kernel_size=5, padding='same', activation='relu'))
+            # model.add(Conv1D(filters=128, kernel_size=6, padding='same', activation='relu'))
+            # model.add(Dropout(self.dropout))
+            # model.add(MaxPool1D(pool_size=2, padding='same'))
 
-            model.add(Flatten())
+            model.add(Flatten(input_shape=self.data_shape))
 
             for _ in range(self.extra_layers):
                 model.add(Dense(self.neurons_per_layer, kernel_initializer='glorot_uniform'))
@@ -219,7 +219,7 @@ class ModelEvaluator:
         LOGGER.info('===\nAll returns\n===')
         self.print_returns_distribution(self.model.test_returns)
 
-    def evaluate(self, export_image=False, certainty=0.34):
+    def evaluate(self, certainty=0.34):
         predicted = self.model.predict(self.model.X_test)
 
         real_ups = self.model.y_test[:, 0]
@@ -236,9 +236,7 @@ class ModelEvaluator:
                                  (-1 * self.model.test_returns[predicted_downs]))
 
         LOGGER.info('===\nStrategy returns\n===')
-        self.print_returns_distribution(real_returns)
-        if export_image:
-            self.display_returns(real_returns)
+        return self.print_returns_distribution(real_returns)
 
     def evaluate_report(self):
         predicted = self.model.predict_classes(self.model.X_test)
@@ -247,10 +245,13 @@ class ModelEvaluator:
     def print_returns_distribution(self, returns):
         neg = np.sum(returns[returns < 0])
         pos = np.sum(returns[returns > 0])
+        if neg == 0 and pos == 0:
+            return False
         LOGGER.info('Negative returns: ' + str(neg))
         LOGGER.info('Positive returns: ' + str(pos))
         LOGGER.info('Pos/Neg ratio: ' + str(pos / (neg * -1)))
         LOGGER.info('Sum of returns: ' + str(np.sum(returns)))
+        return True
 
     def display_returns(self, returns):
         import seaborn as sns

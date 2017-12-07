@@ -3,6 +3,7 @@ import pandas as pd
 import pandas_datareader as pdr
 from datetime import datetime
 from collections import defaultdict
+from functools import reduce
 import nasdaqpredictor
 import logging
 import os
@@ -24,8 +25,12 @@ class DataLoader:
         self.max_shift = max_shift
         self.return_shift_days = return_shift_days
 
-        self.all_tickers = pd.read_csv(os.path.dirname(__file__) + ticker_file_name)
+        self.all_tickers = pd.read_csv(ticker_file_name)
         self.original_data_dict = None
+
+        # self.tickers = pd.read_csv(ticker_file_name, parse_dates=['from', 'to'])
+        # self.min_date = datetime(1990, 1, 1)
+        # self.max_date = datetime(2017, 12, 1)
 
     def reload_all(self):
         self.original_data_dict = defaultdict(lambda: None)
@@ -53,7 +58,7 @@ class DataLoader:
             LOGGER.info('Retry ({}) for skipped tickers: {}'.format(self._attempt_count, str(skipped_tickers)))
             self.load_for_tickers(skipped_tickers)
 
-    def construct_file_name(self, ticker):
+    def construct_file_name(self, ticker, from_date=None, to_date=None):
         return '{}__{}__{}.csv'.format(ticker,
                                        self.from_date.strftime('%Y_%m_%d'),
                                        self.to_date.strftime('%Y_%m_%d'))
@@ -120,7 +125,7 @@ class DataTransformer:
         return data
 
     def _create_full_dataset(self, data: pd.DataFrame) -> pd.DataFrame:
-        #full = pd.concat((data.iloc[:, 0:4].pct_change(), data.iloc[:, 4:8], data['Return']), axis=1)
+        # full = pd.concat((data.iloc[:, 0:4].pct_change(), data.iloc[:, 4:8], data['Return']), axis=1)
         full = pd.concat((data.iloc[:, 4:8], data['Return']), axis=1)
         # return full.iloc[1:-self.return_shift_days]
         return full.iloc[:-self.return_shift_days]
