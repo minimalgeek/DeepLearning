@@ -8,9 +8,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 if __name__ == '__main__':
-    loader = DataLoader('tickers/nasdaq_tickers.csv',
-                        datetime(2000, 1, 1),
-                        datetime(2017, 1, 1))
+    loader = DataLoader('tickers/NASDAQ100.csv')
     transformer = DataTransformer(loader, return_shift_days=3)
 
     model = Model(transformer,

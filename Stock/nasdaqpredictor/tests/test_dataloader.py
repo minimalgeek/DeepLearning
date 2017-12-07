@@ -40,10 +40,10 @@ def test_loader_init(loader: DataLoader):
     assert loader.all_tickers.ticker.iloc[-1] == 'XRAY'
 
 
-def test_construct_file_name(loader: DataLoader):
-    file_name = loader.construct_file_name('AAPL')
+def test_construct_file_name():
+    file_name = DataLoader.construct_file_name('AAPL')
     assert file_name == 'AAPL__2000_01_01__2017_01_01.csv'
-    file_name = loader.construct_file_name('IBM')
+    file_name = DataLoader.construct_file_name('IBM')
     assert file_name == 'IBM__2000_01_01__2017_01_01.csv'
 
 

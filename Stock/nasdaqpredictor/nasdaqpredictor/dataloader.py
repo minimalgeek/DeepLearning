@@ -16,68 +16,62 @@ class DataLoader:
 
     def __init__(self,
                  ticker_file_name: str,
-                 from_date: datetime,
-                 to_date: datetime,
-                 max_shift: int = 30,
                  return_shift_days: int = 5):
-        self.from_date = from_date
-        self.to_date = to_date
-        self.max_shift = max_shift
         self.return_shift_days = return_shift_days
 
-        self.all_tickers = pd.read_csv(ticker_file_name)
         self.original_data_dict = None
+        self._attempt_count = 0
+        self.skipped_tickers = pd.DataFrame()
 
-        # self.tickers = pd.read_csv(ticker_file_name, parse_dates=['from', 'to'])
-        # self.min_date = datetime(1990, 1, 1)
-        # self.max_date = datetime(2017, 12, 1)
+        self.rows = pd.read_csv(ticker_file_name, parse_dates=['from', 'to'])
+        self.rows['from'].fillna(datetime(1990, 1, 1), inplace=True)
+        self.rows['to'].fillna(datetime(2017, 12, 1), inplace=True)
 
     def reload_all(self):
         self.original_data_dict = defaultdict(lambda: None)
-        self._attempt_count = 0
-        self.load_for_tickers(self.all_tickers.ticker)
+        self.load_for_tickers(self.rows)
 
-    def load_for_tickers(self, tickers):
+    def load_for_tickers(self, rows):
         LOGGER.info('Load tickers')
 
-        skipped_tickers = []
-        for ticker in tickers:
-            path = self.construct_full_path(ticker)
+        for index, row in rows.iterrows():
+            path = DataLoader.construct_full_path(row)
             if os.path.exists(path):
                 data = pd.read_csv(path)
             else:
-                data = self._download(skipped_tickers, ticker)
+                data = self._download(row)
                 if data is not None:
                     data.to_csv(path)
 
             if data is not None:
-                self.original_data_dict[ticker] = data
+                self.original_data_dict[tuple(row)] = data
 
-        if len(skipped_tickers) > 0 and self._attempt_count < DataLoader.MAX_DOWNLOAD_ATTEMPT:
+        if len(self.skipped_tickers) > 0 and self._attempt_count < DataLoader.MAX_DOWNLOAD_ATTEMPT:
             self._attempt_count += 1
-            LOGGER.info('Retry ({}) for skipped tickers: {}'.format(self._attempt_count, str(skipped_tickers)))
-            self.load_for_tickers(skipped_tickers)
+            LOGGER.info('Retry ({}) for skipped tickers: {}'.format(self._attempt_count, str(self.skipped_tickers)))
+            self.skipped_tickers = pd.DataFrame()
+            self.load_for_tickers(self.skipped_tickers)
 
-    def construct_file_name(self, ticker, from_date=None, to_date=None):
-        return '{}__{}__{}.csv'.format(ticker,
-                                       self.from_date.strftime('%Y_%m_%d'),
-                                       self.to_date.strftime('%Y_%m_%d'))
+    def construct_file_name(row):
+        return '{}__{}__{}.csv'.format(row['ticker'],
+                                       row['from'].strftime('%Y_%m_%d'),
+                                       row['to'].strftime('%Y_%m_%d'))
 
-    def construct_full_path(self, ticker):
+    def construct_full_path(ticker):
         return os.path.abspath(os.path.join(nasdaqpredictor.DATA_PATH,
-                                            self.construct_file_name(ticker)))
+                                            DataLoader.construct_file_name(ticker)))
 
-    def _download(self, skipped_tickers, ticker):
+    def _download(self, row):
         try:
-            original_data = pdr.get_data_yahoo(ticker, self.from_date, self.to_date)
-            original_data.drop(['Volume', 'Adj Close'], axis=1, inplace=True)
+            original_data: pd.DataFrame = pdr.get_data_google(row['ticker'],
+                                                              row['from'].to_datetime(),
+                                                              row['to'].to_datetime())
+            original_data.drop(['Volume', 'Adj Close'], axis=1, inplace=True, errors='ignore')
             return original_data
         except Exception as e:
             LOGGER.error(e)
-            skipped_tickers.append(ticker)
+            self.skipped_tickers = self.skipped_tickers.append(row)
             return None
-        else:
-            LOGGER.info(ticker + ' downloaded successfully')
 
 
 class DataTransformer:
@@ -117,6 +111,7 @@ class DataTransformer:
     def _append_new_features(self, data: pd.DataFrame) -> pd.DataFrame:
         def feature(data, first_col, second_col, base_col):
             return (data[first_col] - data[second_col]) / data[base_col]
+
         data['OC diff'] = feature(data, 'Open', 'Close', 'Close')
         data['HL diff'] = feature(data, 'High', 'Low', 'Close')
         data['OL diff'] = feature(data, 'Open', 'Low', 'Close')
