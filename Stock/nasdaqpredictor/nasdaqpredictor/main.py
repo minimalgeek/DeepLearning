@@ -8,18 +8,18 @@ LOGGER = logging.getLogger(__name__)
 
 
 if __name__ == '__main__':
-    loader = DataLoader('tickers/NASDAQ100.csv')
+    loader = DataLoader('tickers/NASDAQ100.csv', load_from_google=False)
     transformer = DataTransformer(loader, return_shift_days=3)
 
     model = Model(transformer,
                   #file_path='models/full_model_2017_12_07_11_23.hdf5',
                   test_date=datetime(2015, 1, 1),
                   learning_rate=1e-3,
-                  extra_layers=5,
-                  neurons_per_layer=50,
-                  dropout=0.1,
+                  extra_layers=6,
+                  neurons_per_layer=80,
+                  dropout=0.3,
                   batch_size=2**12,
-                  epochs=100,
+                  epochs=200,
                   extremes=3,
                   window=50)
 

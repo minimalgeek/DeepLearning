@@ -60,11 +60,19 @@ class Model:
         LOGGER.info('Build model data')
         if self.transformer.transformed_data_dict is None:
             self.transformer.transform()
+            self._build_scaler()
 
         for ticker, data in self.transformer.transformed_data_dict.items():
             self._build_model_data_for_ticker(data, ticker)
 
         self._summarize_and_scale_data()
+
+    def _build_scaler(self):
+        self.scaler = StandardScaler()
+        frames = self.transformer.transformed_data_dict.values()
+        train_subset = [frame.drop('Return', axis=1)[:self.test_date] for frame in frames]
+        full_X_train = np.concatenate(train_subset)
+        self.scaler.fit(full_X_train)
 
     def _build_model_data_for_ticker(self, data, ticker):
 
@@ -76,25 +84,26 @@ class Model:
         y_train = y_data[:self.test_date].iloc[self.window - 1:]
         y_test = y_data[self.test_date:].iloc[self.window - 1:]
 
-        if len(X_test) == 0 or len(X_train) == 0:
+        if len(X_test) < self.window or len(X_train) < self.window:
             return
 
-        scaler = StandardScaler()
-        X_train = scaler.fit_transform(X_train)
-        X_test = scaler.transform(X_test)
-        self.data[ticker]['scaler'] = scaler
+        X_train = self.scaler.transform(X_train)
+        X_test = self.scaler.transform(X_test)
 
-        def build_2D_input_data(input):
+        def build_all_the_windows(input):
             return [input[i:i + self.window] for i in range(0, input.shape[0] - self.window + 1)]
 
-        X_train = build_2D_input_data(X_train)
-        X_test = build_2D_input_data(X_test)
+        X_train = build_all_the_windows(X_train)
+        X_test = build_all_the_windows(X_test)
 
-        X_train = np.stack(X_train)
-        X_test = np.stack(X_test)
+        def stack_together_all_the_windows(X):
+            return np.stack(X) if len(X) > 0 else None
 
-        assert len(X_train) == len(y_train)
-        assert len(X_test) == len(y_test)
+        X_train = stack_together_all_the_windows(X_train)
+        X_test = stack_together_all_the_windows(X_test)
+
+        # assert len(X_train) == len(y_train)
+        # assert len(X_test) == len(y_test)
 
         self.data[ticker]['X_train'] = X_train
         self.data[ticker]['X_test'] = X_test
@@ -102,10 +111,12 @@ class Model:
         self.data[ticker]['y_test'] = self.series_to_binarized_columns(y_test)
         self.data[ticker]['test_returns'] = y_test
 
-        if not hasattr(self, 'data_shape'):
+        if not hasattr(self, 'data_shape') and X_train is not None:
             self.data_shape = X_train.shape[1:]
 
     def series_to_binarized_columns(self, y):
+        if len(y) == 0:
+            return None
         pos = y > self.extremes
         neg = y < -self.extremes
         meds = (y > -self.extremes) & (y < self.extremes)

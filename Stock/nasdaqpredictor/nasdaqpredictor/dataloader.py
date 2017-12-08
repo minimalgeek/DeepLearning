@@ -16,8 +16,10 @@ class DataLoader:
 
     def __init__(self,
                  ticker_file_name: str,
-                 return_shift_days: int = 5):
+                 return_shift_days: int = 5,
+                 load_from_google=True):
         self.return_shift_days = return_shift_days
+        self.load_from_google = load_from_google
 
         self.original_data_dict = None
         self._attempt_count = 0
@@ -34,16 +36,19 @@ class DataLoader:
     def load_for_tickers(self, rows):
         LOGGER.info('Load tickers')
 
+        def data_exists(dat: pd.DataFrame):
+            return dat is not None and len(dat) > 0
+
         for index, row in rows.iterrows():
             path = DataLoader.construct_full_path(row)
             if os.path.exists(path):
                 data = pd.read_csv(path)
-            else:
+            elif self.load_from_google:
                 data = self._download(row)
-                if data is not None:
+                if data_exists(data):
                     data.to_csv(path)
 
-            if data is not None:
+            if data_exists(data):
                 self.original_data_dict[tuple(row)] = data
 
         if len(self.skipped_tickers) > 0 and self._attempt_count < DataLoader.MAX_DOWNLOAD_ATTEMPT:
