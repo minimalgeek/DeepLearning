@@ -18,7 +18,7 @@ class PredictionExporter:
         self.tickers = self.model.transformer.data_loader.all_tickers
 
     def export_to_csv(self):
-        from_date = self.model.test_date
+        from_date = self.model.dev_date
         to_date = self.model.transformer.data_loader.to_date
 
         for ticker in self.tickers.ticker:
@@ -50,7 +50,7 @@ if __name__ == '__main__':
     transformer = DataTransformer(loader, return_shift_days=-3)
     model = Model(transformer,
                   file_path='models/full_model_2017_11_16_11_42.hdf5',
-                  test_date=datetime(2015, 1, 1),
+                  dev_date=datetime(2015, 1, 1),
                   learning_rate=1e-3,
                   extra_layers=15,
                   neurons_per_layer=70,

@@ -27,7 +27,8 @@ class Model:
     def __init__(self,
                  transformer: DataTransformer,
                  file_path=None,
-                 test_date: datetime = datetime(2014, 1, 1),
+                 dev_date: datetime = datetime(2013, 1, 1),
+                 test_date: datetime = datetime(2015, 1, 1),
                  neurons_per_layer=150,
                  dropout=0.2,
                  extra_layers=4,
@@ -44,6 +45,7 @@ class Model:
         else:
             self.file_path = file_path
             self.run_fit = False
+        self.dev_date = dev_date.strftime('%Y-%m-%d')
         self.test_date = test_date.strftime('%Y-%m-%d')
         self.neurons_per_layer = neurons_per_layer
         self.dropout = dropout
@@ -70,7 +72,7 @@ class Model:
     def _build_scaler(self):
         self.scaler = StandardScaler()
         frames = self.transformer.transformed_data_dict.values()
-        train_subset = [frame.drop('Return', axis=1)[:self.test_date] for frame in frames]
+        train_subset = [frame.drop('Return', axis=1)[:self.dev_date] for frame in frames]
         full_X_train = np.concatenate(train_subset)
         self.scaler.fit(full_X_train)
 
@@ -79,40 +81,37 @@ class Model:
         X_data = data.drop('Return', axis=1)
         y_data = data['Return']
 
-        X_train = X_data[:self.test_date]
-        X_test = X_data[self.test_date:]
-        y_train = y_data[:self.test_date].iloc[self.window - 1:]
-        y_test = y_data[self.test_date:].iloc[self.window - 1:]
-
-        if len(X_test) < self.window or len(X_train) < self.window:
-            return
-
-        X_train = self.scaler.transform(X_train)
-        X_test = self.scaler.transform(X_test)
+        def apply_to_all(func, X_subsets, min_size=0):
+            return tuple(
+                [func(subset) if subset is not None and len(subset) >= min_size else None for subset in X_subsets])
 
         def build_all_the_windows(input):
             return [input[i:i + self.window] for i in range(0, input.shape[0] - self.window + 1)]
 
-        X_train = build_all_the_windows(X_train)
-        X_test = build_all_the_windows(X_test)
-
         def stack_together_all_the_windows(X):
             return np.stack(X) if len(X) > 0 else None
 
-        X_train = stack_together_all_the_windows(X_train)
-        X_test = stack_together_all_the_windows(X_test)
+        # train, dev, test set
+        X_subset = (X_data[:self.dev_date], X_data[self.dev_date:self.test_date], X_data[self.test_date:])
+        X_subset = apply_to_all(self.scaler.transform, X_subset, self.window)
+        X_subset = apply_to_all(build_all_the_windows, X_subset, self.window)
+        X_subset = apply_to_all(stack_together_all_the_windows, X_subset, 1)
 
-        # assert len(X_train) == len(y_train)
-        # assert len(X_test) == len(y_test)
+        y_train = y_data[:self.dev_date].iloc[self.window - 1:]
+        y_dev = y_data[self.dev_date:self.test_date].iloc[self.window - 1:]
+        y_test = y_data[self.test_date:].iloc[self.window - 1:]
 
-        self.data[ticker]['X_train'] = X_train
-        self.data[ticker]['X_test'] = X_test
+        self.data[ticker]['X_train'] = X_subset[0]
+        self.data[ticker]['X_dev'] = X_subset[1]
+        self.data[ticker]['X_test'] = X_subset[2]
         self.data[ticker]['y_train'] = self.series_to_binarized_columns(y_train)
+        self.data[ticker]['y_dev'] = self.series_to_binarized_columns(y_dev)
         self.data[ticker]['y_test'] = self.series_to_binarized_columns(y_test)
+        self.data[ticker]['dev_returns'] = y_dev
         self.data[ticker]['test_returns'] = y_test
 
-        if not hasattr(self, 'data_shape') and X_train is not None:
-            self.data_shape = X_train.shape[1:]
+        if not hasattr(self, 'data_shape') and X_subset[0] is not None:
+            self.data_shape = X_subset[0].shape[1:]
 
     def series_to_binarized_columns(self, y):
         if len(y) == 0:
@@ -125,20 +124,40 @@ class Model:
 
     def _summarize_and_scale_data(self):
         X_train = []
+        X_dev = []
         X_test = []
         y_train = []
+        y_dev = []
         y_test = []
+        dev_returns = []
         test_returns = []
+
+        def append(left, right):
+            if right is not None and len(right) > 0:
+                left.append(right)
+
         for ticker, datas in self.data.items():
-            X_train.append(datas['X_train'])
-            X_test.append(datas['X_test'])
-            y_train.append(datas['y_train'])
-            y_test.append(datas['y_test'])
-            test_returns.append(datas['test_returns'])
+            append(X_train, datas['X_train'])
+            append(X_dev, datas['X_dev'])
+            append(X_test, datas['X_test'])
+            append(y_train, datas['y_train'])
+            append(y_dev, datas['y_dev'])
+            append(y_test, datas['y_test'])
+            append(dev_returns, datas['dev_returns'])
+            append(test_returns, datas['test_returns'])
         self.X_train = np.concatenate(X_train)
+        self.X_dev = np.concatenate(X_dev)
         self.X_test = np.concatenate(X_test)
+
         self.y_train = np.concatenate(y_train)
+        self.y_dev = np.concatenate(y_dev)
         self.y_test = np.concatenate(y_test)
+
+        assert len(self.X_train) == len(self.y_train)
+        assert len(self.X_dev) == len(self.y_dev)
+        assert len(self.X_test) == len(self.y_test)
+
+        self.dev_returns = np.concatenate(dev_returns)
         self.test_returns = np.concatenate(test_returns)
 
     def build_neural_net(self):
@@ -158,6 +177,7 @@ class Model:
             # model.add(MaxPool1D(pool_size=2, padding='same'))
 
             model.add(Flatten(input_shape=self.data_shape))
+            # model.add(Flatten())
 
             for _ in range(self.extra_layers):
                 model.add(Dense(self.neurons_per_layer, kernel_initializer='glorot_uniform'))
@@ -195,7 +215,7 @@ class Model:
         LOGGER.info('Class weights: ' + str(cw))
 
         self.model.fit(self.X_train, self.y_train,
-                       validation_data=(self.X_test, self.y_test),
+                       validation_data=(self.X_dev, self.y_dev),
                        epochs=self.epochs,
                        batch_size=self.batch_size,
                        verbose=0,
@@ -228,30 +248,35 @@ class ModelEvaluator:
                  model: Model):
         self.model = model
         LOGGER.info('===\nAll returns\n===')
-        self.print_returns_distribution(self.model.test_returns)
+        self.print_returns_distribution(self.model.dev_returns)
 
-    def evaluate(self, certainty=0.34):
-        predicted = self.model.predict(self.model.X_test)
+    def evaluate(self, certainty=0.34, on_set='dev'):
+        if on_set == 'dev':
+            predicted = self.model.predict(self.model.X_dev)
+            real_ups = self.model.y_dev[:, 0]
+            real_downs = self.model.y_dev[:, 2]
+            predicted_ups = (predicted[:, 0] > certainty) & (np.argmax(predicted, axis=1) == 0)
+            predicted_downs = (predicted[:, 2] > certainty) & (np.argmax(predicted, axis=1) == 2)
 
-        real_ups = self.model.y_test[:, 0]
-        real_downs = self.model.y_test[:, 2]
-        predicted_ups = (predicted[:, 0] > certainty) & (np.argmax(predicted, axis=1) == 0)
-        predicted_downs = (predicted[:, 2] > certainty) & (np.argmax(predicted, axis=1) == 2)
+            real_returns = np.append(self.model.dev_returns[predicted_ups],
+                                     (-1 * self.model.dev_returns[predicted_downs]))
+        elif on_set == 'test':
+            predicted = self.model.predict(self.model.X_test)
+            real_ups = self.model.y_test[:, 0]
+            real_downs = self.model.y_test[:, 2]
+            predicted_ups = (predicted[:, 0] > certainty) & (np.argmax(predicted, axis=1) == 0)
+            predicted_downs = (predicted[:, 2] > certainty) & (np.argmax(predicted, axis=1) == 2)
+
+            real_returns = np.append(self.model.test_returns[predicted_ups],
+                                     (-1 * self.model.test_returns[predicted_downs]))
 
         LOGGER.info('Real ups count')
         LOGGER.info(pd.value_counts(real_ups[predicted_ups]))
         LOGGER.info('Real downs count')
         LOGGER.info(pd.value_counts(real_downs[predicted_downs]))
 
-        real_returns = np.append(self.model.test_returns[predicted_ups],
-                                 (-1 * self.model.test_returns[predicted_downs]))
-
         LOGGER.info('===\nStrategy returns\n===')
         return self.print_returns_distribution(real_returns)
-
-    def evaluate_report(self):
-        predicted = self.model.predict_classes(self.model.X_test)
-        LOGGER.info(classification_report(self.model.y_test[:, 0], predicted))
 
     def print_returns_distribution(self, returns):
         neg = np.sum(returns[returns < 0])
@@ -263,8 +288,3 @@ class ModelEvaluator:
         LOGGER.info('Pos/Neg ratio: ' + str(pos / (neg * -1)))
         LOGGER.info('Sum of returns: ' + str(np.sum(returns)))
         return True
-
-    def display_returns(self, returns):
-        import seaborn as sns
-        plot = sns.tsplot(returns)
-        plot.get_figure().savefig(self.model.file_path + '.png')

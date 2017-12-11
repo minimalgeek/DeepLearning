@@ -15,7 +15,7 @@ def model() -> Model:
     transformer = DataTransformer(loader)
     mod = Model(transformer,
                 epochs=1,
-                test_date=datetime(2014, 1, 1),
+                dev_date=datetime(2014, 1, 1),
                 run_fit=False)
     mod.build_model_data()
     mod.build_neural_net()
