@@ -4,21 +4,20 @@ import logging
 import os
 
 from datetime import datetime
+
+from keras import Input
 from keras.models import Sequential
 from keras.layers import Activation, Dense, Dropout, BatchNormalization, Flatten
 from keras.optimizers import Adam
 from keras.callbacks import LambdaCallback
 from keras.models import load_model
-from keras.layers import Conv1D, MaxPool1D
+import keras_resnet.models
 
 from sklearn.utils import class_weight
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import confusion_matrix, classification_report
 
 from dataloader import DataTransformer
 from collections import defaultdict
-from itertools import product
-from functools import partial
 
 LOGGER = logging.getLogger(__name__)
 
@@ -145,9 +144,13 @@ class Model:
             append(y_test, datas['y_test'])
             append(dev_returns, datas['dev_returns'])
             append(test_returns, datas['test_returns'])
-        self.X_train = np.concatenate(X_train)
-        self.X_dev = np.concatenate(X_dev)
-        self.X_test = np.concatenate(X_test)
+        # self.X_train = np.concatenate(X_train)
+        # self.X_dev = np.concatenate(X_dev)
+        # self.X_test = np.concatenate(X_test)
+
+        self.X_train = np.expand_dims(np.concatenate(X_train), axis=-1)
+        self.X_dev = np.expand_dims(np.concatenate(X_dev), axis=-1)
+        self.X_test = np.expand_dims(np.concatenate(X_test), axis=-1)
 
         self.y_train = np.concatenate(y_train)
         self.y_dev = np.concatenate(y_dev)
@@ -164,30 +167,32 @@ class Model:
         if self.run_fit:
             LOGGER.info('Build neural network architecture')
 
-            model = Sequential()
+            # model = Sequential()
+            #
+            # # model.add(Conv1D(filters=16, kernel_size=3, padding='same', activation='relu',
+            # #                  input_shape=self.data_shape))
+            # # model.add(Conv1D(filters=32, kernel_size=4, padding='same', activation='relu'))
+            # # model.add(Dropout(self.dropout))
+            # # model.add(MaxPool1D(pool_size=2, padding='same'))
+            # # model.add(Conv1D(filters=64, kernel_size=5, padding='same', activation='relu'))
+            # # model.add(Conv1D(filters=128, kernel_size=6, padding='same', activation='relu'))
+            # # model.add(Dropout(self.dropout))
+            # # model.add(MaxPool1D(pool_size=2, padding='same'))
+            #
+            # model.add(Flatten(input_shape=self.data_shape))
+            # # model.add(Flatten())
+            #
+            # for _ in range(self.extra_layers):
+            #     model.add(Dense(self.neurons_per_layer, kernel_initializer='glorot_uniform'))
+            #     model.add(BatchNormalization())
+            #     model.add(Activation('relu'))
+            #     model.add(Dropout(self.dropout))
+            #
+            # model.add(Dense(3, kernel_initializer='glorot_uniform'))
+            # model.add(Activation('softmax'))
 
-            # model.add(Conv1D(filters=16, kernel_size=3, padding='same', activation='relu',
-            #                  input_shape=self.data_shape))
-            # model.add(Conv1D(filters=32, kernel_size=4, padding='same', activation='relu'))
-            # model.add(Dropout(self.dropout))
-            # model.add(MaxPool1D(pool_size=2, padding='same'))
-            # model.add(Conv1D(filters=64, kernel_size=5, padding='same', activation='relu'))
-            # model.add(Conv1D(filters=128, kernel_size=6, padding='same', activation='relu'))
-            # model.add(Dropout(self.dropout))
-            # model.add(MaxPool1D(pool_size=2, padding='same'))
-
-            model.add(Flatten(input_shape=self.data_shape))
-            # model.add(Flatten())
-
-            for _ in range(self.extra_layers):
-                model.add(Dense(self.neurons_per_layer, kernel_initializer='glorot_uniform'))
-                model.add(BatchNormalization())
-                model.add(Activation('relu'))
-                model.add(Dropout(self.dropout))
-
-            model.add(Dense(3, kernel_initializer='glorot_uniform'))
-            model.add(Activation('softmax'))
-
+            x = Input(self.data_shape+(1,))
+            model = keras_resnet.models.ResNet18(x, classes=3)
             model.compile(optimizer=Adam(lr=self.learning_rate),
                           loss='categorical_crossentropy',
                           metrics=['accuracy'])
@@ -252,23 +257,13 @@ class ModelEvaluator:
 
     def evaluate(self, certainty=0.34, on_set='dev'):
         if on_set == 'dev':
-            predicted = self.model.predict(self.model.X_dev)
-            real_ups = self.model.y_dev[:, 0]
-            real_downs = self.model.y_dev[:, 2]
-            predicted_ups = (predicted[:, 0] > certainty) & (np.argmax(predicted, axis=1) == 0)
-            predicted_downs = (predicted[:, 2] > certainty) & (np.argmax(predicted, axis=1) == 2)
-
-            real_returns = np.append(self.model.dev_returns[predicted_ups],
-                                     (-1 * self.model.dev_returns[predicted_downs]))
+            predicted_downs, predicted_ups, real_downs, real_returns, real_ups = self.calculate_returns(
+                self.model.X_dev, certainty,
+                self.model.dev_returns, self.model.y_dev)
         elif on_set == 'test':
-            predicted = self.model.predict(self.model.X_test)
-            real_ups = self.model.y_test[:, 0]
-            real_downs = self.model.y_test[:, 2]
-            predicted_ups = (predicted[:, 0] > certainty) & (np.argmax(predicted, axis=1) == 0)
-            predicted_downs = (predicted[:, 2] > certainty) & (np.argmax(predicted, axis=1) == 2)
-
-            real_returns = np.append(self.model.test_returns[predicted_ups],
-                                     (-1 * self.model.test_returns[predicted_downs]))
+            predicted_downs, predicted_ups, real_downs, real_returns, real_ups = self.calculate_returns(
+                self.model.X_test, certainty,
+                self.model.test_returns, self.model.y_test)
 
         LOGGER.info('Real ups count')
         LOGGER.info(pd.value_counts(real_ups[predicted_ups]))
@@ -277,6 +272,16 @@ class ModelEvaluator:
 
         LOGGER.info('===\nStrategy returns\n===')
         return self.print_returns_distribution(real_returns)
+
+    def calculate_returns(self, X, certainty, ret, y):
+        predicted = self.model.predict(X)
+        real_ups = y[:, 0]
+        real_downs = y[:, 2]
+        predicted_ups = (predicted[:, 0] > certainty) & (np.argmax(predicted, axis=1) == 0)
+        predicted_downs = (predicted[:, 2] > certainty) & (np.argmax(predicted, axis=1) == 2)
+        real_returns = np.append(ret[predicted_ups],
+                                 (-1 * ret[predicted_downs]))
+        return predicted_downs, predicted_ups, real_downs, real_returns, real_ups
 
     def print_returns_distribution(self, returns):
         neg = np.sum(returns[returns < 0])
