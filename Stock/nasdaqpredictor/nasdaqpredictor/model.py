@@ -26,8 +26,8 @@ class Model:
     def __init__(self,
                  transformer: DataTransformer,
                  file_path=None,
-                 dev_date: datetime = datetime(2013, 1, 1),
-                 test_date: datetime = datetime(2015, 1, 1),
+                 dev_date=datetime(2013, 1, 1),
+                 test_date=datetime(2015, 1, 1),
                  neurons_per_layer=150,
                  dropout=0.2,
                  extra_layers=4,
@@ -73,47 +73,56 @@ class Model:
         frames = self.transformer.transformed_data_dict.values()
         train_subset = [frame.drop('Return', axis=1)[:self.dev_date] for frame in frames]
         full_X_train = np.concatenate(train_subset)
+        self.data_shape = (self.window, full_X_train.shape[1])
         self.scaler.fit(full_X_train)
 
     def _build_model_data_for_ticker(self, data, ticker):
 
-        X_data = data.drop('Return', axis=1)
-        y_data = data['Return']
+        def apply_to_all(func, iterable):
+            return [func(subset) if subset is not None and len(subset) > 0 else None for subset in iterable]
 
-        def apply_to_all(func, X_subsets, min_size=0):
-            return tuple(
-                [func(subset) if subset is not None and len(subset) >= min_size else None for subset in X_subsets])
+        def scale(df: pd.DataFrame):
+            orig_shape = df.shape
+            returns = df['Return']
+            scaled_values = self.scaler.transform(df.drop('Return', axis=1).values)
+            ret = pd.DataFrame(np.concatenate([scaled_values, np.expand_dims(returns.values, axis=1)], axis=1),
+                               index=df.index, columns=df.columns)
+            assert ret.shape == orig_shape
+            return ret
 
-        def build_all_the_windows(input):
-            return [input[i:i + self.window] for i in range(0, input.shape[0] - self.window + 1)]
+        def split_into_windows(df: pd.DataFrame):
+            if len(df) >= self.window:
+                ret = [df[i:i + self.window] for i in range(0, df.shape[0] - self.window + 1)]
+                assert len(ret) == len(df) - self.window + 1
+                return ret
+            return None
 
-        def stack_together_all_the_windows(X):
-            return np.stack(X) if len(X) > 0 else None
+        def stack_together_and_split_into_X_and_y(lst_of_dfs):
+            X = np.stack([df.values[:, :-1] for df in lst_of_dfs])
+            y = np.stack([df.values[-1, -1] for df in lst_of_dfs])
+            return X, y
 
-        # train, dev, test set
-        X_subset = (X_data[:self.dev_date], X_data[self.dev_date:self.test_date], X_data[self.test_date:])
-        X_subset = apply_to_all(self.scaler.transform, X_subset, self.window)
-        X_subset = apply_to_all(build_all_the_windows, X_subset, self.window)
-        X_subset = apply_to_all(stack_together_all_the_windows, X_subset, 1)
+        train_dev_test = (data[:self.dev_date], data[self.dev_date:self.test_date], data[self.test_date:])
+        train_dev_test = apply_to_all(scale, train_dev_test)
+        train_dev_test = apply_to_all(split_into_windows, train_dev_test)
+        train_dev_test = apply_to_all(stack_together_and_split_into_X_and_y, train_dev_test)
 
-        y_train = y_data[:self.dev_date].iloc[self.window - 1:]
-        y_dev = y_data[self.dev_date:self.test_date].iloc[self.window - 1:]
-        y_test = y_data[self.test_date:].iloc[self.window - 1:]
+        def get_by_position(x, y):
+            if train_dev_test is None or train_dev_test[x] is None:
+                return None
+            return train_dev_test[x][y]
 
-        self.data[ticker]['X_train'] = X_subset[0]
-        self.data[ticker]['X_dev'] = X_subset[1]
-        self.data[ticker]['X_test'] = X_subset[2]
-        self.data[ticker]['y_train'] = self.series_to_binarized_columns(y_train)
-        self.data[ticker]['y_dev'] = self.series_to_binarized_columns(y_dev)
-        self.data[ticker]['y_test'] = self.series_to_binarized_columns(y_test)
-        self.data[ticker]['dev_returns'] = y_dev
-        self.data[ticker]['test_returns'] = y_test
-
-        if not hasattr(self, 'data_shape') and X_subset[0] is not None:
-            self.data_shape = X_subset[0].shape[1:]
+        self.data[ticker]['X_train'] = get_by_position(0, 0)
+        self.data[ticker]['X_dev'] = get_by_position(1, 0)
+        self.data[ticker]['X_test'] = get_by_position(2, 0)
+        self.data[ticker]['y_train'] = self.series_to_binarized_columns(get_by_position(0, 1))
+        self.data[ticker]['y_dev'] = self.series_to_binarized_columns(get_by_position(1, 1))
+        self.data[ticker]['y_test'] = self.series_to_binarized_columns(get_by_position(2, 1))
+        self.data[ticker]['dev_returns'] = get_by_position(1, 1)
+        self.data[ticker]['test_returns'] = get_by_position(2, 1)
 
     def series_to_binarized_columns(self, y):
-        if len(y) == 0:
+        if y is None or len(y) == 0:
             return None
         pos = y > self.extremes
         neg = y < -self.extremes
@@ -144,13 +153,13 @@ class Model:
             append(y_test, datas['y_test'])
             append(dev_returns, datas['dev_returns'])
             append(test_returns, datas['test_returns'])
-        # self.X_train = np.concatenate(X_train)
-        # self.X_dev = np.concatenate(X_dev)
-        # self.X_test = np.concatenate(X_test)
+        self.X_train = np.concatenate(X_train)
+        self.X_dev = np.concatenate(X_dev)
+        self.X_test = np.concatenate(X_test)
 
-        self.X_train = np.expand_dims(np.concatenate(X_train), axis=-1)
-        self.X_dev = np.expand_dims(np.concatenate(X_dev), axis=-1)
-        self.X_test = np.expand_dims(np.concatenate(X_test), axis=-1)
+        # self.X_train = np.expand_dims(np.concatenate(X_train), axis=-1)
+        # self.X_dev = np.expand_dims(np.concatenate(X_dev), axis=-1)
+        # self.X_test = np.expand_dims(np.concatenate(X_test), axis=-1)
 
         self.y_train = np.concatenate(y_train)
         self.y_dev = np.concatenate(y_dev)
@@ -167,32 +176,33 @@ class Model:
         if self.run_fit:
             LOGGER.info('Build neural network architecture')
 
-            # model = Sequential()
-            #
-            # # model.add(Conv1D(filters=16, kernel_size=3, padding='same', activation='relu',
-            # #                  input_shape=self.data_shape))
-            # # model.add(Conv1D(filters=32, kernel_size=4, padding='same', activation='relu'))
-            # # model.add(Dropout(self.dropout))
-            # # model.add(MaxPool1D(pool_size=2, padding='same'))
-            # # model.add(Conv1D(filters=64, kernel_size=5, padding='same', activation='relu'))
-            # # model.add(Conv1D(filters=128, kernel_size=6, padding='same', activation='relu'))
-            # # model.add(Dropout(self.dropout))
-            # # model.add(MaxPool1D(pool_size=2, padding='same'))
-            #
-            # model.add(Flatten(input_shape=self.data_shape))
-            # # model.add(Flatten())
-            #
-            # for _ in range(self.extra_layers):
-            #     model.add(Dense(self.neurons_per_layer, kernel_initializer='glorot_uniform'))
-            #     model.add(BatchNormalization())
-            #     model.add(Activation('relu'))
-            #     model.add(Dropout(self.dropout))
-            #
-            # model.add(Dense(3, kernel_initializer='glorot_uniform'))
-            # model.add(Activation('softmax'))
+            model = Sequential()
 
-            x = Input(self.data_shape+(1,))
-            model = keras_resnet.models.ResNet18(x, classes=3)
+            # model.add(Conv1D(filters=16, kernel_size=3, padding='same', activation='relu',
+            #                  input_shape=self.data_shape))
+            # model.add(Conv1D(filters=32, kernel_size=4, padding='same', activation='relu'))
+            # model.add(Dropout(self.dropout))
+            # model.add(MaxPool1D(pool_size=2, padding='same'))
+            # model.add(Conv1D(filters=64, kernel_size=5, padding='same', activation='relu'))
+            # model.add(Conv1D(filters=128, kernel_size=6, padding='same', activation='relu'))
+            # model.add(Dropout(self.dropout))
+            # model.add(MaxPool1D(pool_size=2, padding='same'))
+
+            model.add(Flatten(input_shape=self.data_shape))
+            # model.add(Flatten())
+
+            for _ in range(self.extra_layers):
+                model.add(Dense(self.neurons_per_layer, kernel_initializer='glorot_uniform'))
+                model.add(BatchNormalization())
+                model.add(Activation('relu'))
+                model.add(Dropout(self.dropout))
+
+            model.add(Dense(3, kernel_initializer='glorot_uniform'))
+            model.add(Activation('softmax'))
+
+            # x = Input(self.data_shape + (1,))
+            # model = keras_resnet.models.ResNet18(x, classes=3)
+
             model.compile(optimizer=Adam(lr=self.learning_rate),
                           loss='categorical_crossentropy',
                           metrics=['accuracy'])
@@ -257,11 +267,11 @@ class ModelEvaluator:
 
     def evaluate(self, certainty=0.34, on_set='dev'):
         if on_set == 'dev':
-            predicted_downs, predicted_ups, real_downs, real_returns, real_ups = self.calculate_returns(
+            predicted_downs, predicted_ups, real_downs, real_ups, returns = self.calculate_returns(
                 self.model.X_dev, certainty,
                 self.model.dev_returns, self.model.y_dev)
         elif on_set == 'test':
-            predicted_downs, predicted_ups, real_downs, real_returns, real_ups = self.calculate_returns(
+            predicted_downs, predicted_ups, real_downs, real_ups, returns = self.calculate_returns(
                 self.model.X_test, certainty,
                 self.model.test_returns, self.model.y_test)
 
@@ -271,25 +281,25 @@ class ModelEvaluator:
         LOGGER.info(pd.value_counts(real_downs[predicted_downs]))
 
         LOGGER.info('===\nStrategy returns\n===')
-        return self.print_returns_distribution(real_returns)
+        return self.print_returns_distribution(returns)
 
     def calculate_returns(self, X, certainty, ret, y):
         predicted = self.model.predict(X)
-        real_ups = y[:, 0]
-        real_downs = y[:, 2]
-        predicted_ups = (predicted[:, 0] > certainty) & (np.argmax(predicted, axis=1) == 0)
-        predicted_downs = (predicted[:, 2] > certainty) & (np.argmax(predicted, axis=1) == 2)
-        real_returns = np.append(ret[predicted_ups],
+        real_ups = y[:, 2]
+        real_downs = y[:, 0]
+        predicted_ups = (predicted[:, 2] > certainty) & (np.argmax(predicted, axis=1) == 2)
+        predicted_downs = (predicted[:, 0] > certainty) & (np.argmax(predicted, axis=1) == 0)
+        returns = np.append(ret[predicted_ups],
                                  (-1 * ret[predicted_downs]))
-        return predicted_downs, predicted_ups, real_downs, real_returns, real_ups
+        return predicted_downs, predicted_ups, real_downs, real_ups, returns
 
     def print_returns_distribution(self, returns):
-        neg = np.sum(returns[returns < 0])
-        pos = np.sum(returns[returns > 0])
-        if neg == 0 and pos == 0:
+        lose = np.sum(returns[returns < 0])
+        win = np.sum(returns[returns > 0])
+        if lose == 0 and win == 0:
             return False
-        LOGGER.info('Negative returns: ' + str(neg))
-        LOGGER.info('Positive returns: ' + str(pos))
-        LOGGER.info('Pos/Neg ratio: ' + str(pos / (neg * -1)))
+        LOGGER.info('Negative returns: ' + str(lose))
+        LOGGER.info('Positive returns: ' + str(win))
+        LOGGER.info('Pos/Neg ratio: ' + str(win / (lose * -1)))
         LOGGER.info('Sum of returns: ' + str(np.sum(returns)))
         return True
