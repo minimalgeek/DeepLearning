@@ -7,7 +7,7 @@ from datetime import datetime
 
 from keras import Input
 from keras.models import Sequential
-from keras.layers import Activation, Dense, Dropout, BatchNormalization, Flatten
+from keras.layers import Activation, Dense, Dropout, BatchNormalization, Flatten, LSTM, TimeDistributed
 from keras.optimizers import Adam
 from keras.callbacks import LambdaCallback
 from keras.models import load_model
@@ -188,14 +188,17 @@ class Model:
             # model.add(Dropout(self.dropout))
             # model.add(MaxPool1D(pool_size=2, padding='same'))
 
-            model.add(Flatten(input_shape=self.data_shape))
-            # model.add(Flatten())
+            model.add(LSTM(32, return_sequences=True, input_shape=self.data_shape))
+            model.add(Dropout(0.2))
+            model.add(LSTM(32))
+            model.add(Dropout(0.2))
 
-            for _ in range(self.extra_layers):
-                model.add(Dense(self.neurons_per_layer, kernel_initializer='glorot_uniform'))
-                model.add(BatchNormalization())
-                model.add(Activation('relu'))
-                model.add(Dropout(self.dropout))
+            # model.add(Flatten())
+            # for _ in range(self.extra_layers):
+            #     model.add(Dense(self.neurons_per_layer, kernel_initializer='glorot_uniform'))
+            #     model.add(BatchNormalization())
+            #     model.add(Activation('relu'))
+            #     model.add(Dropout(self.dropout))
 
             model.add(Dense(3, kernel_initializer='glorot_uniform'))
             model.add(Activation('softmax'))

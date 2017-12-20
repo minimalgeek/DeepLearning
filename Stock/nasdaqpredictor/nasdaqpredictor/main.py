@@ -14,21 +14,21 @@ if __name__ == '__main__':
                   #file_path='models/full_model_2017_12_19_13_13.hdf5',
                   dev_date=datetime(2013, 1, 1),
                   test_date=datetime(2015, 1, 1),
-                  learning_rate=1e-3,
-                  extra_layers=5,
-                  neurons_per_layer=150,
-                  dropout=0.2,
+                  learning_rate=1e-2,
+                  extra_layers=6,
+                  neurons_per_layer=30,
+                  dropout=0.1,
                   batch_size=2**12,
-                  epochs=100,
+                  epochs=50,
                   extremes=3,
-                  window=50)
+                  window=30)
 
     model.build_model_data()
     model.build_neural_net()
 
     model_evaluator = ModelEvaluator(model)
     for c in [0.35 + x/100 for x in range(50)]:
-        LOGGER.info('======================== Ceratinty: {} ========================'.format(c))
+        LOGGER.info('======================== Certainty: {} ========================'.format(c))
         LOGGER.info('================= DEV =================')
         should_continue = model_evaluator.evaluate(certainty=c, on_set='dev')
         LOGGER.info('================= TEST =================')
