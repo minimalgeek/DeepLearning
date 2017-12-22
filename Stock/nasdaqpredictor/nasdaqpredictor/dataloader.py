@@ -15,7 +15,7 @@ class DataLoader:
     MAX_DOWNLOAD_ATTEMPT = 3
 
     def __init__(self,
-                 ticker_file_name: str,
+                 ticker_file_name: str = 'tickers/NASDAQ100.csv',
                  return_shift_days: int = 5,
                  load_from_google=True):
         self.return_shift_days = return_shift_days
@@ -125,10 +125,10 @@ class DataTransformer:
         return data
 
     def _create_full_dataset(self, data: pd.DataFrame) -> pd.DataFrame:
-        # full = pd.concat((data.iloc[:, 0:4].pct_change(), data.iloc[:, 4:8], data['Return']), axis=1)
-        full = pd.concat((data.iloc[:, 4:8], data['Return']), axis=1)
-        # return full.iloc[1:-self.return_shift_days]
-        return full.iloc[:-self.return_shift_days]
+        full = pd.concat((data.iloc[:, 0:4].pct_change(), data.iloc[:, 4:8], data['Return']), axis=1)
+        # full = pd.concat((data.iloc[:, 4:8], data['Return']), axis=1)
+        return full.iloc[1:-self.return_shift_days]
+        # return full.iloc[:-self.return_shift_days]
 
     def _clean_structure(self, data) -> pd.DataFrame:
         return data.replace([np.inf, -np.inf, np.NaN, np.NAN], 0.0)

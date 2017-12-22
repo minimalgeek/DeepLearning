@@ -184,17 +184,17 @@ class Model:
             # model.add(Dropout(self.dropout))
             # model.add(MaxPool1D(pool_size=2, padding='same'))
 
-            # model.add(LSTM(64, return_sequences=True, input_shape=self.data_shape))
-            # model.add(Dropout(self.dropout))
-            # model.add(LSTM(64))
-            # model.add(Dropout(self.dropout))
+            model.add(LSTM(64, return_sequences=True, input_shape=self.data_shape))
+            model.add(Dropout(self.dropout))
+            model.add(LSTM(64))
+            model.add(Dropout(self.dropout))
 
-            model.add(Flatten(input_shape=self.data_shape))
-            for _ in range(self.extra_layers):
-                model.add(Dense(self.neurons_per_layer, kernel_initializer='glorot_uniform'))
-                model.add(BatchNormalization())
-                model.add(Activation('relu'))
-                model.add(Dropout(self.dropout))
+            # model.add(Flatten(input_shape=self.data_shape))
+            # for _ in range(self.extra_layers):
+            #     model.add(Dense(self.neurons_per_layer, kernel_initializer='glorot_uniform'))
+            #     model.add(BatchNormalization())
+            #     model.add(Activation('relu'))
+            #     model.add(Dropout(self.dropout))
 
             model.add(Dense(3, kernel_initializer='glorot_uniform'))
             model.add(Activation('softmax'))
