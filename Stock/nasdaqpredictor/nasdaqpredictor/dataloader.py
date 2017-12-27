@@ -4,6 +4,7 @@ import pandas_datareader as pdr
 from datetime import datetime
 from collections import defaultdict
 from functools import reduce
+import itertools
 import nasdaqpredictor
 import logging
 import os
@@ -105,7 +106,6 @@ class DataTransformer:
     def steps(self):
         yield self._set_index_column_if_necessary
         yield self._append_new_features
-        yield self._create_full_dataset
         yield self._clean_structure
 
     def _set_index_column_if_necessary(self, data: pd.DataFrame) -> pd.DataFrame:
@@ -114,21 +114,37 @@ class DataTransformer:
         return data
 
     def _append_new_features(self, data: pd.DataFrame) -> pd.DataFrame:
-        def feature(data, first_col, second_col, base_col):
-            return (data[first_col] - data[second_col]) / data[base_col]
+        basic_columns = data.columns
 
-        data['OC diff'] = feature(data, 'Open', 'Close', 'Close')
-        data['HL diff'] = feature(data, 'High', 'Low', 'Close')
-        data['OL diff'] = feature(data, 'Open', 'Low', 'Close')
-        data['CH diff'] = feature(data, 'Close', 'High', 'Close')
-        data['Return'] = 100 * data['Close'].pct_change(self.return_shift_days).shift(-self.return_shift_days)
+        def feature(df, first_col, second_col, base_col):
+            return (df[first_col] - df[second_col]) / df[base_col]
+
+        def add_extra_columns(df, cols):
+            pool = []
+            for left, right in itertools.product(cols, cols):
+                pair1 = left + right
+                pair2 = right + left
+                if left != right and pair1 not in pool and pair2 not in pool:
+                    df[left + '/' + right] = feature(df, left, right, 'Close')
+                    pool.append(pair1)
+
+        add_extra_columns(data, basic_columns)
+
+        days = [5, 10]
+        for col, day in itertools.product(basic_columns, days):
+            data[col + ' ' + str(day) + ' MA'] = data[col].rolling(day).mean()
+            data[col + ' ' + str(day) + ' max'] = data[col].rolling(day).max()
+            data[col + ' ' + str(day) + ' min'] = data[col].rolling(day).min()
+        data.dropna(inplace=True)
+
+        rolling_features = list(filter(lambda col: (' MA' in col) or (' max' in col) or (' min' in col), data.columns))
+        add_extra_columns(data, rolling_features)
+
+        ret = 100 * data['Close'].pct_change(self.return_shift_days).shift(-self.return_shift_days)
+        features_to_drop = list(filter(lambda col_name: '/' not in col_name, data.columns))
+        data.drop(features_to_drop, axis=1, inplace=True)
+        data['Return'] = ret
         return data
-
-    def _create_full_dataset(self, data: pd.DataFrame) -> pd.DataFrame:
-        full = pd.concat((data.iloc[:, 0:4].pct_change(), data.iloc[:, 4:8], data['Return']), axis=1)
-        # full = pd.concat((data.iloc[:, 4:8], data['Return']), axis=1)
-        return full.iloc[1:-self.return_shift_days]
-        # return full.iloc[:-self.return_shift_days]
 
     def _clean_structure(self, data) -> pd.DataFrame:
         return data.replace([np.inf, -np.inf, np.NaN, np.NAN], 0.0)

@@ -24,14 +24,11 @@ class Model:
                  file_path=None,
                  dev_date=datetime(2013, 1, 1),
                  test_date=datetime(2015, 1, 1),
-                 neurons_per_layer=150,
                  dropout=0.2,
-                 extra_layers=4,
-                 epochs=500,
+                 epochs=100,
                  batch_size=512,
                  learning_rate=0.001,
-                 window=30,
-                 extremes=5):
+                 extremes=3):
         self.transformer = transformer
         if file_path is None:
             now = datetime.now().strftime('%Y_%m_%d_%H_%M')
@@ -42,13 +39,10 @@ class Model:
             self.run_fit = False
         self.dev_date = dev_date.strftime('%Y-%m-%d')
         self.test_date = test_date.strftime('%Y-%m-%d')
-        self.neurons_per_layer = neurons_per_layer
         self.dropout = dropout
-        self.extra_layers = extra_layers  # beyond the first hidden layer
         self.epochs = epochs
         self.batch_size = batch_size
         self.learning_rate = learning_rate
-        self.window = window
         self.extremes = extremes
 
         self.data = defaultdict(lambda: {})
@@ -69,7 +63,7 @@ class Model:
         frames = self.transformer.transformed_data_dict.values()
         train_subset = [frame.drop('Return', axis=1)[:self.dev_date] for frame in frames]
         full_X_train = np.concatenate(train_subset)
-        self.data_shape = (self.window, full_X_train.shape[1])
+        self.data_shape = (full_X_train.shape[1],)
         self.scaler.fit(full_X_train)
 
     def _build_model_data_for_ticker(self, data, ticker):
@@ -86,22 +80,14 @@ class Model:
             assert ret.shape == orig_shape
             return ret
 
-        def split_into_windows(df: pd.DataFrame):
-            if len(df) >= self.window:
-                ret = [df[i:i + self.window] for i in range(0, df.shape[0] - self.window + 1)]
-                assert len(ret) == len(df) - self.window + 1
-                return ret
-            return None
-
-        def stack_together_and_split_into_X_and_y(lst_of_dfs):
-            X = np.stack([df.values[:, :-1] for df in lst_of_dfs])
-            y = np.stack([df.values[-1, -1] for df in lst_of_dfs])
+        def split_into_X_and_y(lst_of_dfs):
+            X = np.stack([df.drop('Return', axis=1) for df in lst_of_dfs])
+            y = np.stack([df['Return'] for df in lst_of_dfs])
             return X, y
 
         train_dev_test = (data[:self.dev_date], data[self.dev_date:self.test_date], data[self.test_date:])
         train_dev_test = apply_to_all(scale, train_dev_test)
-        train_dev_test = apply_to_all(split_into_windows, train_dev_test)
-        train_dev_test = apply_to_all(stack_together_and_split_into_X_and_y, train_dev_test)
+        train_dev_test = apply_to_all(split_into_X_and_y, train_dev_test)
 
         def get_by_position(x, y):
             if train_dev_test is None or train_dev_test[x] is None:
@@ -153,10 +139,6 @@ class Model:
         self.X_dev = np.concatenate(X_dev)
         self.X_test = np.concatenate(X_test)
 
-        # self.X_train = np.expand_dims(np.concatenate(X_train), axis=-1)
-        # self.X_dev = np.expand_dims(np.concatenate(X_dev), axis=-1)
-        # self.X_test = np.expand_dims(np.concatenate(X_test), axis=-1)
-
         self.y_train = np.concatenate(y_train)
         self.y_dev = np.concatenate(y_dev)
         self.y_test = np.concatenate(y_test)
@@ -173,16 +155,6 @@ class Model:
             LOGGER.info('Build neural network architecture')
 
             model = Sequential()
-
-            # model.add(Conv1D(filters=16, kernel_size=3, padding='same', activation='relu',
-            #                  input_shape=self.data_shape))
-            # model.add(Conv1D(filters=32, kernel_size=4, padding='same', activation='relu'))
-            # model.add(Dropout(self.dropout))
-            # model.add(MaxPool1D(pool_size=2, padding='same'))
-            # model.add(Conv1D(filters=64, kernel_size=5, padding='same', activation='relu'))
-            # model.add(Conv1D(filters=128, kernel_size=6, padding='same', activation='relu'))
-            # model.add(Dropout(self.dropout))
-            # model.add(MaxPool1D(pool_size=2, padding='same'))
 
             model.add(LSTM(64, return_sequences=True, input_shape=self.data_shape))
             model.add(Dropout(self.dropout))
@@ -289,7 +261,7 @@ class ModelEvaluator:
         predicted_ups = (predicted[:, 2] > certainty) & (np.argmax(predicted, axis=1) == 2)
         predicted_downs = (predicted[:, 0] > certainty) & (np.argmax(predicted, axis=1) == 0)
         returns = np.append(ret[predicted_ups],
-                                 (-1 * ret[predicted_downs]))
+                            (-1 * ret[predicted_downs]))
         return predicted_downs, predicted_ups, real_downs, real_ups, returns
 
     def print_returns_distribution(self, returns):
