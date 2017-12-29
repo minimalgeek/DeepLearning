@@ -15,9 +15,9 @@ if __name__ == '__main__':
                   dev_date=datetime(2013, 1, 1),
                   test_date=datetime(2015, 1, 1),
                   learning_rate=1e-3,
-                  dropout=0.1,
-                  batch_size=2**12,
-                  epochs=100,
+                  dropout=0.05,
+                  batch_size=2**7,
+                  epochs=50,
                   extremes=3)
 
     model.build_model_data()

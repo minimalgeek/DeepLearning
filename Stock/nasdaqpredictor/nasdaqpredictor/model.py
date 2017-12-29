@@ -56,15 +56,14 @@ class Model:
         for ticker, data in self.transformer.transformed_data_dict.items():
             self._build_model_data_for_ticker(data, ticker)
 
-        self._summarize_and_scale_data()
-
     def _build_scaler(self):
         self.scaler = StandardScaler()
         frames = self.transformer.transformed_data_dict.values()
         train_subset = [frame.drop('Return', axis=1)[:self.dev_date] for frame in frames]
         full_X_train = np.concatenate(train_subset)
-        self.data_shape = (full_X_train.shape[1],)
+        self.data_shape = (full_X_train.shape[1], 1)
         self.scaler.fit(full_X_train)
+        LOGGER.info('Data shape: ' + str(self.data_shape))
 
     def _build_model_data_for_ticker(self, data, ticker):
 
@@ -80,14 +79,14 @@ class Model:
             assert ret.shape == orig_shape
             return ret
 
-        def split_into_X_and_y(lst_of_dfs):
-            X = np.stack([df.drop('Return', axis=1) for df in lst_of_dfs])
-            y = np.stack([df['Return'] for df in lst_of_dfs])
+        def split_into_x_and_y(df: pd.DataFrame):
+            X = df.drop('Return', axis=1)
+            y = df['Return']
             return X, y
 
         train_dev_test = (data[:self.dev_date], data[self.dev_date:self.test_date], data[self.test_date:])
         train_dev_test = apply_to_all(scale, train_dev_test)
-        train_dev_test = apply_to_all(split_into_X_and_y, train_dev_test)
+        train_dev_test = apply_to_all(split_into_x_and_y, train_dev_test)
 
         def get_by_position(x, y):
             if train_dev_test is None or train_dev_test[x] is None:
@@ -112,53 +111,15 @@ class Model:
         y = np.array([neg, meds, pos]).T
         return y
 
-    def _summarize_and_scale_data(self):
-        X_train = []
-        X_dev = []
-        X_test = []
-        y_train = []
-        y_dev = []
-        y_test = []
-        dev_returns = []
-        test_returns = []
-
-        def append(left, right):
-            if right is not None and len(right) > 0:
-                left.append(right)
-
-        for ticker, datas in self.data.items():
-            append(X_train, datas['X_train'])
-            append(X_dev, datas['X_dev'])
-            append(X_test, datas['X_test'])
-            append(y_train, datas['y_train'])
-            append(y_dev, datas['y_dev'])
-            append(y_test, datas['y_test'])
-            append(dev_returns, datas['dev_returns'])
-            append(test_returns, datas['test_returns'])
-        self.X_train = np.concatenate(X_train)
-        self.X_dev = np.concatenate(X_dev)
-        self.X_test = np.concatenate(X_test)
-
-        self.y_train = np.concatenate(y_train)
-        self.y_dev = np.concatenate(y_dev)
-        self.y_test = np.concatenate(y_test)
-
-        assert len(self.X_train) == len(self.y_train)
-        assert len(self.X_dev) == len(self.y_dev)
-        assert len(self.X_test) == len(self.y_test)
-
-        self.dev_returns = np.concatenate(dev_returns)
-        self.test_returns = np.concatenate(test_returns)
-
     def build_neural_net(self):
         if self.run_fit:
             LOGGER.info('Build neural network architecture')
 
             model = Sequential()
 
-            model.add(LSTM(64, return_sequences=True, input_shape=self.data_shape))
+            model.add(LSTM(16, return_sequences=True, input_shape=self.data_shape))
             model.add(Dropout(self.dropout))
-            model.add(LSTM(64))
+            model.add(LSTM(16))
             model.add(Dropout(self.dropout))
 
             # model.add(Flatten(input_shape=self.data_shape))
@@ -170,9 +131,6 @@ class Model:
 
             model.add(Dense(3, kernel_initializer='glorot_uniform'))
             model.add(Activation('softmax'))
-
-            # x = Input(self.data_shape + (1,))
-            # model = keras_resnet.models.ResNet18(x, classes=3)
 
             model.compile(optimizer=Adam(lr=self.learning_rate),
                           loss='categorical_crossentropy',
@@ -195,25 +153,27 @@ class Model:
             on_epoch_end=lambda epoch, logs: [LOGGER.info('===> epoch {} ended'.format(epoch + 1)),
                                               LOGGER.info(logs)])
 
-        temp_y = np.argmax(self.y_train, axis=1)
+        y_train = np.concatenate([data['y_train'] for ticker, data in self.data.items() if data['y_train'] is not None])
+        temp_y = np.argmax(y_train, axis=1)
         cw = class_weight.compute_class_weight('balanced', np.unique(temp_y), temp_y)
 
         LOGGER.info('Class weights: ' + str(cw))
 
-        self.model.fit(self.X_train, self.y_train,
-                       validation_data=(self.X_dev, self.y_dev),
-                       epochs=self.epochs,
-                       batch_size=self.batch_size,
-                       verbose=0,
-                       class_weight=cw,
-                       callbacks=[batch_print_callback])
+        def get_numpy_array(df: pd.DataFrame):
+            return np.expand_dims(df.values, axis=-1)
+
+        for ticker, data in self.data.items():
+            LOGGER.info(f'Fitting {ticker}')
+            if data['X_train'] is not None:
+                self.model.fit(get_numpy_array(data['X_train']), data['y_train'],
+                               #validation_data=(get_numpy_array(data['X_dev']), data['y_dev']),
+                               epochs=self.epochs,
+                               batch_size=self.batch_size,
+                               verbose=0,
+                               class_weight=cw,
+                               callbacks=[batch_print_callback])
 
     def predict(self, X_test):
-        """
-        Predict from an array
-        :param X_test: Input, should be already scaled
-        :return: prediction
-        """
         predicted = self.model.predict(X_test)
         return predicted
 
@@ -221,40 +181,27 @@ class Model:
         predicted = self.model.predict_classes(X_test)
         return predicted
 
-    def predict_one(self, ticker, date_to_predict: datetime):
-        X_test = self.data[ticker]['X'].loc[date_to_predict.strftime('%Y-%m-%d')]
-        X_test_to_network = np.expand_dims(X_test, axis=0)
-        X_test_transformed = self.scaler.transform(X_test_to_network)
-        predicted = self.model.predict(X_test_transformed)
-        return predicted
-
 
 class ModelEvaluator:
     def __init__(self,
                  model: Model):
         self.model = model
-        LOGGER.info('===\nAll returns\n===')
-        self.print_returns_distribution(self.model.dev_returns)
+        # LOGGER.info('===\nAll returns\n===')
+        # self.print_returns_distribution(self.model.dev_returns)
 
     def evaluate(self, certainty=0.34, on_set='dev'):
-        if on_set == 'dev':
-            predicted_downs, predicted_ups, real_downs, real_ups, returns = self.calculate_returns(
-                self.model.X_dev, certainty,
-                self.model.dev_returns, self.model.y_dev)
-        elif on_set == 'test':
-            predicted_downs, predicted_ups, real_downs, real_ups, returns = self.calculate_returns(
-                self.model.X_test, certainty,
-                self.model.test_returns, self.model.y_test)
-
-        LOGGER.info('Real ups count')
-        LOGGER.info(pd.value_counts(real_ups[predicted_ups]))
-        LOGGER.info('Real downs count')
-        LOGGER.info(pd.value_counts(real_downs[predicted_downs]))
+        all_returns = []
+        for ticker, data in self.model.data.items():
+            returns = self.calculate_returns(data['X_' + on_set],
+                                             data['y_' + on_set],
+                                             data[on_set + '_returns'],
+                                             certainty)
+            all_returns.append(returns)
 
         LOGGER.info('===\nStrategy returns\n===')
-        return self.print_returns_distribution(returns)
+        return self.print_returns_distribution(np.concatenate(all_returns))
 
-    def calculate_returns(self, X, certainty, ret, y):
+    def calculate_returns(self, X, y, ret, certainty):
         predicted = self.model.predict(X)
         real_ups = y[:, 2]
         real_downs = y[:, 0]
@@ -262,7 +209,10 @@ class ModelEvaluator:
         predicted_downs = (predicted[:, 0] > certainty) & (np.argmax(predicted, axis=1) == 0)
         returns = np.append(ret[predicted_ups],
                             (-1 * ret[predicted_downs]))
-        return predicted_downs, predicted_ups, real_downs, real_ups, returns
+
+        LOGGER.debug('Real ups count: {}'.format(pd.value_counts(real_ups[predicted_ups])))
+        LOGGER.debug('Real downs count: {}'.format(pd.value_counts(real_downs[predicted_downs])))
+        return returns
 
     def print_returns_distribution(self, returns):
         lose = np.sum(returns[returns < 0])

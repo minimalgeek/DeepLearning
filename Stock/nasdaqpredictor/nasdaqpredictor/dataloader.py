@@ -48,6 +48,9 @@ class DataLoader:
                 data = self._download(row)
                 if data_exists(data):
                     data.to_csv(path)
+            else:
+                LOGGER.warning('No data for {}'.format(row.values))
+                continue
 
             if data_exists(data):
                 self.original_data_dict[tuple(row)] = data
@@ -93,9 +96,10 @@ class DataTransformer:
         self.data_loader.reload_all()
 
         for ticker, data in self.data_loader.original_data_dict.items():
+            LOGGER.info('Transform {}'.format(ticker))
             for step in self.steps():
                 try:
-                    data = step(data)
+                    step(data)
                 except Exception as e:
                     LOGGER.error(e)
 
@@ -108,12 +112,11 @@ class DataTransformer:
         yield self._append_new_features
         yield self._clean_structure
 
-    def _set_index_column_if_necessary(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _set_index_column_if_necessary(self, data: pd.DataFrame):
         if 'Date' in data.columns:
             data.set_index('Date', inplace=True)
-        return data
 
-    def _append_new_features(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _append_new_features(self, data: pd.DataFrame):
         basic_columns = data.columns
 
         def feature(df, first_col, second_col, base_col):
@@ -130,7 +133,7 @@ class DataTransformer:
 
         add_extra_columns(data, basic_columns)
 
-        days = [5, 10]
+        days = [5]
         for col, day in itertools.product(basic_columns, days):
             data[col + ' ' + str(day) + ' MA'] = data[col].rolling(day).mean()
             data[col + ' ' + str(day) + ' max'] = data[col].rolling(day).max()
@@ -144,7 +147,6 @@ class DataTransformer:
         features_to_drop = list(filter(lambda col_name: '/' not in col_name, data.columns))
         data.drop(features_to_drop, axis=1, inplace=True)
         data['Return'] = ret
-        return data
 
-    def _clean_structure(self, data) -> pd.DataFrame:
-        return data.replace([np.inf, -np.inf, np.NaN, np.NAN], 0.0)
+    def _clean_structure(self, data: pd.DataFrame):
+        data.replace([np.inf, -np.inf, np.NaN, np.NAN], 0.0, inplace=True)
