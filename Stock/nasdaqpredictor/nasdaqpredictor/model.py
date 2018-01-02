@@ -168,7 +168,7 @@ class Model:
                                batch_size=self.batch_size,
                                verbose=0,
                                class_weight=cw,
-                               callbacks=[batch_print_callback]) # tensorboard
+                               callbacks=[batch_print_callback])  # tensorboard
 
     def predict(self, X_test):
         predicted = self.model.predict(X_test)
@@ -189,6 +189,7 @@ class ModelEvaluator:
         for ticker, data in self.model.data.items():
             if data['X_' + on_set] is None:
                 continue
+            LOGGER.debug(f'Returns calculation for {ticker}')
             returns = self.calculate_returns(data['X_' + on_set],
                                              data['y_' + on_set],
                                              data[on_set + '_returns'],
