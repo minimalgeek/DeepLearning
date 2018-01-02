@@ -5,7 +5,7 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
-from keras.callbacks import LambdaCallback
+from keras.callbacks import LambdaCallback, TensorBoard
 from keras.layers import Activation, Dense, Dropout, LSTM, Conv1D, MaxPool1D, Flatten, BatchNormalization
 from keras.models import Sequential
 from keras.models import load_model
@@ -13,6 +13,7 @@ from keras.optimizers import Adam
 from sklearn.preprocessing import StandardScaler
 from sklearn.utils import class_weight
 
+from nasdaqpredictor import TENSORBOARD_PATH
 from dataloader import DataTransformer
 
 LOGGER = logging.getLogger(__name__)
@@ -122,13 +123,6 @@ class Model:
             model.add(LSTM(16))
             model.add(Dropout(self.dropout))
 
-            # model.add(Flatten(input_shape=self.data_shape))
-            # for _ in range(self.extra_layers):
-            #     model.add(Dense(self.neurons_per_layer, kernel_initializer='glorot_uniform'))
-            #     model.add(BatchNormalization())
-            #     model.add(Activation('relu'))
-            #     model.add(Dropout(self.dropout))
-
             model.add(Dense(3, kernel_initializer='glorot_uniform'))
             model.add(Activation('softmax'))
 
@@ -153,6 +147,9 @@ class Model:
             on_epoch_end=lambda epoch, logs: [LOGGER.info('===> epoch {} ended'.format(epoch + 1)),
                                               LOGGER.info(logs)])
 
+        # tensorboard = TensorBoard(log_dir=TENSORBOARD_PATH, histogram_freq=0,
+        #                           write_graph=True, write_images=True)
+
         y_train = np.concatenate([data['y_train'] for ticker, data in self.data.items() if data['y_train'] is not None])
         temp_y = np.argmax(y_train, axis=1)
         cw = class_weight.compute_class_weight('balanced', np.unique(temp_y), temp_y)
@@ -166,12 +163,12 @@ class Model:
             LOGGER.info(f'Fitting {ticker}')
             if data['X_train'] is not None:
                 self.model.fit(get_numpy_array(data['X_train']), data['y_train'],
-                               #validation_data=(get_numpy_array(data['X_dev']), data['y_dev']),
+                               # validation_data=(get_numpy_array(data['X_dev']), data['y_dev']),
                                epochs=self.epochs,
                                batch_size=self.batch_size,
                                verbose=0,
                                class_weight=cw,
-                               callbacks=[batch_print_callback])
+                               callbacks=[batch_print_callback]) # tensorboard
 
     def predict(self, X_test):
         predicted = self.model.predict(X_test)
@@ -186,12 +183,12 @@ class ModelEvaluator:
     def __init__(self,
                  model: Model):
         self.model = model
-        # LOGGER.info('===\nAll returns\n===')
-        # self.print_returns_distribution(self.model.dev_returns)
 
     def evaluate(self, certainty=0.34, on_set='dev'):
         all_returns = []
         for ticker, data in self.model.data.items():
+            if data['X_' + on_set] is None:
+                continue
             returns = self.calculate_returns(data['X_' + on_set],
                                              data['y_' + on_set],
                                              data[on_set + '_returns'],
@@ -202,7 +199,7 @@ class ModelEvaluator:
         return self.print_returns_distribution(np.concatenate(all_returns))
 
     def calculate_returns(self, X, y, ret, certainty):
-        predicted = self.model.predict(X)
+        predicted = self.model.predict(np.expand_dims(X, axis=-1))
         real_ups = y[:, 2]
         real_downs = y[:, 0]
         predicted_ups = (predicted[:, 2] > certainty) & (np.argmax(predicted, axis=1) == 2)

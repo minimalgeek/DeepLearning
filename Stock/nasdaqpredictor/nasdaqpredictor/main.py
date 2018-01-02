@@ -11,7 +11,7 @@ if __name__ == '__main__':
     transformer = DataTransformer(loader, return_shift_days=3)
 
     model = Model(transformer,
-                  #file_path='models/full_model_2017_12_19_13_13.hdf5',
+                  #file_path='models/full_model_2018_01_02_11_25.hdf5',
                   dev_date=datetime(2013, 1, 1),
                   test_date=datetime(2015, 1, 1),
                   learning_rate=1e-3,
