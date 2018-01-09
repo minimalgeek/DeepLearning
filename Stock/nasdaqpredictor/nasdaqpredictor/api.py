@@ -17,7 +17,7 @@ loader = DataLoader('/nasdaq_tickers.csv',
                     datetime(2017, 1, 1))
 transformer = DataTransformer(loader, return_shift_days=-2)
 model = Model(transformer,
-              test_date=datetime(2015, 1, 1),
+              dev_date=datetime(2015, 1, 1),
               file_path='models/full_model_2017_11_22_11_07.hdf5')
 
 

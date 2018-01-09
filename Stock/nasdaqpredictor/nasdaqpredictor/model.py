@@ -1,23 +1,20 @@
-import numpy as np
-import pandas as pd
 import logging
 import os
-
-from datetime import datetime
-from keras.models import Sequential
-from keras.layers import Activation, Dense, Dropout, BatchNormalization
-from keras.optimizers import Adam
-from keras.callbacks import LambdaCallback
-from keras.models import load_model
-import keras.backend as K
-
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import confusion_matrix, classification_report
-
-from dataloader import DataTransformer
 from collections import defaultdict
-from itertools import product
-from functools import partial
+from datetime import datetime
+
+import numpy as np
+import pandas as pd
+from keras.callbacks import LambdaCallback, TensorBoard
+from keras.layers import Activation, Dense, Dropout, LSTM, Conv1D, MaxPool1D, Flatten, BatchNormalization
+from keras.models import Sequential
+from keras.models import load_model
+from keras.optimizers import Adam
+from sklearn.preprocessing import StandardScaler
+from sklearn.utils import class_weight
+
+from nasdaqpredictor import TENSORBOARD_PATH
+from dataloader import DataTransformer
 
 LOGGER = logging.getLogger(__name__)
 
@@ -26,14 +23,13 @@ class Model:
     def __init__(self,
                  transformer: DataTransformer,
                  file_path=None,
-                 test_date: datetime = datetime(2014, 1, 1),
-                 neurons_per_layer=150,
+                 dev_date=datetime(2013, 1, 1),
+                 test_date=datetime(2015, 1, 1),
                  dropout=0.2,
-                 extra_layers=4,
-                 epochs=500,
+                 epochs=100,
                  batch_size=512,
                  learning_rate=0.001,
-                 extremes=5):
+                 extremes=3):
         self.transformer = transformer
         if file_path is None:
             now = datetime.now().strftime('%Y_%m_%d_%H_%M')
@@ -42,10 +38,9 @@ class Model:
         else:
             self.file_path = file_path
             self.run_fit = False
+        self.dev_date = dev_date.strftime('%Y-%m-%d')
         self.test_date = test_date.strftime('%Y-%m-%d')
-        self.neurons_per_layer = neurons_per_layer
         self.dropout = dropout
-        self.extra_layers = extra_layers  # beyond the first hidden layer
         self.epochs = epochs
         self.batch_size = batch_size
         self.learning_rate = learning_rate
@@ -57,33 +52,60 @@ class Model:
         LOGGER.info('Build model data')
         if self.transformer.transformed_data_dict is None:
             self.transformer.transform()
+            self._build_scaler()
 
         for ticker, data in self.transformer.transformed_data_dict.items():
             self._build_model_data_for_ticker(data, ticker)
 
-        self._summarize_and_scale_data()
+    def _build_scaler(self):
+        self.scaler = StandardScaler()
+        frames = self.transformer.transformed_data_dict.values()
+        train_subset = [frame.drop('Return', axis=1)[:self.dev_date] for frame in frames]
+        full_X_train = np.concatenate(train_subset)
+        self.data_shape = (full_X_train.shape[1], 1)
+        self.scaler.fit(full_X_train)
+        LOGGER.info('Data shape: ' + str(self.data_shape))
 
     def _build_model_data_for_ticker(self, data, ticker):
-        X = data.drop('Return', axis=1)
-        y = data['Return']
-        self.data[ticker]['X'] = X  # store this, we may need it in future predictions
 
-        X_train = X[:self.test_date]
-        X_test = X[self.test_date:]
-        y_train = y[:self.test_date]
-        y_test = y[self.test_date:]
+        def apply_to_all(func, iterable):
+            return [func(subset) if subset is not None and len(subset) > 0 else None for subset in iterable]
 
-        self.data[ticker]['X_train'] = X_train
-        self.data[ticker]['X_test'] = X_test
-        self.data[ticker]['y_train'] = self.series_to_binarized_columns(y_train)
-        self.data[ticker]['y_test'] = self.series_to_binarized_columns(y_test)
-        self.data[ticker]['train_returns'] = y_train
-        self.data[ticker]['test_returns'] = y_test
+        def scale(df: pd.DataFrame):
+            orig_shape = df.shape
+            returns = df['Return']
+            scaled_values = self.scaler.transform(df.drop('Return', axis=1).values)
+            ret = pd.DataFrame(np.concatenate([scaled_values, np.expand_dims(returns.values, axis=1)], axis=1),
+                               index=df.index, columns=df.columns)
+            assert ret.shape == orig_shape
+            return ret
 
-        if not hasattr(self, 'data_width'):
-            self.data_width = X_train.shape[1]
+        def split_into_x_and_y(df: pd.DataFrame):
+            X = df.drop('Return', axis=1)
+            y = df['Return']
+            return X, y
+
+        train_dev_test = (data[:self.dev_date], data[self.dev_date:self.test_date], data[self.test_date:])
+        train_dev_test = apply_to_all(scale, train_dev_test)
+        train_dev_test = apply_to_all(split_into_x_and_y, train_dev_test)
+
+        def get_by_position(x, y):
+            if train_dev_test is None or train_dev_test[x] is None:
+                return None
+            return train_dev_test[x][y]
+
+        self.data[ticker]['X_train'] = get_by_position(0, 0)
+        self.data[ticker]['X_dev'] = get_by_position(1, 0)
+        self.data[ticker]['X_test'] = get_by_position(2, 0)
+        self.data[ticker]['y_train'] = self.series_to_binarized_columns(get_by_position(0, 1))
+        self.data[ticker]['y_dev'] = self.series_to_binarized_columns(get_by_position(1, 1))
+        self.data[ticker]['y_test'] = self.series_to_binarized_columns(get_by_position(2, 1))
+        self.data[ticker]['dev_returns'] = get_by_position(1, 1)
+        self.data[ticker]['test_returns'] = get_by_position(2, 1)
 
     def series_to_binarized_columns(self, y):
+        if y is None or len(y) == 0:
+            return None
         pos = y > self.extremes
         neg = y < -self.extremes
         meds = (y > -self.extremes) & (y < self.extremes)
@@ -96,22 +118,15 @@ class Model:
 
             model = Sequential()
 
-            model.add(Dense(self.neurons_per_layer, input_dim=self.data_width, kernel_initializer='glorot_uniform'))
-            model.add(BatchNormalization())
-            model.add(Activation('relu'))
+            model.add(LSTM(16, return_sequences=True, input_shape=self.data_shape))
+            model.add(Dropout(self.dropout))
+            model.add(LSTM(16))
             model.add(Dropout(self.dropout))
 
-            for _ in range(self.extra_layers):
-                model.add(Dense(self.neurons_per_layer, kernel_initializer='glorot_uniform'))
-                model.add(BatchNormalization())
-                model.add(Activation('relu'))
-                model.add(Dropout(self.dropout))
-
-            model.add(Dense(3, kernel_initializer='uniform'))
+            model.add(Dense(3, kernel_initializer='glorot_uniform'))
             model.add(Activation('softmax'))
 
             model.compile(optimizer=Adam(lr=self.learning_rate),
-                          #loss=self.create_entropy(),
                           loss='categorical_crossentropy',
                           metrics=['accuracy'])
 
@@ -120,33 +135,10 @@ class Model:
             self.model.save(self.file_path)
         else:
             LOGGER.info('Load neural net from filepath: {}'.format(self.file_path))
-            self.model = load_model(self.file_path,
-                                    custom_objects={'w_categorical_crossentropy': self.create_entropy()})
+            self.model = load_model(self.file_path)
 
         LOGGER.info('Architecture: ')
         self.model.summary(print_fn=LOGGER.info)
-
-    def create_entropy(self):
-        def w_categorical_crossentropy(y_true, y_pred, weights):
-            nb_cl = len(weights)
-            final_mask = K.zeros_like(y_pred[:, 0])
-            y_pred_max = K.max(y_pred, axis=1)
-            y_pred_max = K.expand_dims(y_pred_max, 1)
-            y_pred_max_mat = K.equal(y_pred, y_pred_max)
-            for c_p, c_t in product(range(nb_cl), range(nb_cl)):
-                final_mask += (
-                    K.cast(weights[c_t, c_p], K.floatx()) *
-                    K.cast(y_pred_max_mat[:, c_p], K.floatx()) *
-                    K.cast(y_true[:, c_t], K.floatx())
-                )
-            return K.categorical_crossentropy(y_pred, y_true) * final_mask
-
-        weight_matrix = np.array([[0.1, 4, 7],
-                                  [2, 0.1, 2],
-                                  [7, 4, 0.1]]).astype(np.float64)
-        wcce = partial(w_categorical_crossentropy, weights=weight_matrix)
-        wcce.__name__ = 'w_categorical_crossentropy'
-        return wcce
 
     def _fit_neural_net(self):
         LOGGER.info('Train neural network')
@@ -155,21 +147,30 @@ class Model:
             on_epoch_end=lambda epoch, logs: [LOGGER.info('===> epoch {} ended'.format(epoch + 1)),
                                               LOGGER.info(logs)])
 
-        self.model.fit(self.X_train, self.y_train,
-                       validation_data=(self.X_test, self.y_test),
-                       epochs=self.epochs,
-                       batch_size=self.batch_size,
-                       verbose=3,
-                       callbacks=[batch_print_callback])
-        # score = self.model.evaluate(self.X_test, self.y_test)
-        # LOGGER.info('Test loss: {}, Test accuracy: {}'.format(score[0], score[1]))
+        # tensorboard = TensorBoard(log_dir=TENSORBOARD_PATH, histogram_freq=0,
+        #                           write_graph=True, write_images=True)
+
+        y_train = np.concatenate([data['y_train'] for ticker, data in self.data.items() if data['y_train'] is not None])
+        temp_y = np.argmax(y_train, axis=1)
+        cw = class_weight.compute_class_weight('balanced', np.unique(temp_y), temp_y)
+
+        LOGGER.info('Class weights: ' + str(cw))
+
+        def get_numpy_array(df: pd.DataFrame):
+            return np.expand_dims(df.values, axis=-1)
+
+        for ticker, data in self.data.items():
+            LOGGER.info(f'Fitting {ticker}')
+            if data['X_train'] is not None:
+                self.model.fit(get_numpy_array(data['X_train']), data['y_train'],
+                               # validation_data=(get_numpy_array(data['X_dev']), data['y_dev']),
+                               epochs=self.epochs,
+                               batch_size=self.batch_size,
+                               verbose=0,
+                               class_weight=cw,
+                               callbacks=[batch_print_callback])  # tensorboard
 
     def predict(self, X_test):
-        """
-        Predict from an array
-        :param X_test: Input, should be already scaled
-        :return: prediction
-        """
         predicted = self.model.predict(X_test)
         return predicted
 
@@ -177,80 +178,47 @@ class Model:
         predicted = self.model.predict_classes(X_test)
         return predicted
 
-    def predict_one(self, ticker, date_to_predict: datetime):
-        X_test = self.data[ticker]['X'].loc[date_to_predict.strftime('%Y-%m-%d')]
-        X_test_to_network = np.expand_dims(X_test, axis=0)
-        X_test_transformed = self.scaler.transform(X_test_to_network)
-        predicted = self.model.predict(X_test_transformed)
-        return predicted
-
-    def _summarize_and_scale_data(self):
-        X_train = []
-        X_test = []
-        y_train = []
-        y_test = []
-        test_returns = []
-        for ticker, datas in self.data.items():
-            X_train.append(datas['X_train'])
-            X_test.append(datas['X_test'])
-            y_train.append(datas['y_train'])
-            y_test.append(datas['y_test'])
-            test_returns.append(datas['test_returns'])
-        X_train = np.concatenate(X_train)
-        X_test = np.concatenate(X_test)
-        self.y_train = np.concatenate(y_train)
-        self.y_test = np.concatenate(y_test)
-        self.test_returns = np.concatenate(test_returns)
-
-        self.scaler = StandardScaler()
-        self.X_train = self.scaler.fit_transform(X_train)
-        self.X_test = self.scaler.transform(X_test)
-
 
 class ModelEvaluator:
     def __init__(self,
-                 model: Model,
-                 certainty=0.6):
+                 model: Model):
         self.model = model
-        self.certainty = certainty
 
-    def evaluate(self, export_image=False):
-        predicted = self.model.predict(self.model.X_test)
-
-        real_ups = self.model.y_test[:, 0]
-        real_downs = self.model.y_test[:, 2]
-        predicted_ups = np.logical_and(predicted[:, 0] > self.certainty, predicted[:,0]>predicted[:,2])
-        predicted_downs = np.logical_and(predicted[:, 2] > self.certainty, predicted[:,2]>predicted[:,0])
-
-        LOGGER.info('Real ups count')
-        LOGGER.info(pd.value_counts(real_ups[predicted_ups]))
-        LOGGER.info('Real downs count')
-        LOGGER.info(pd.value_counts(real_downs[predicted_downs]))
-
-        real_returns = np.append(self.model.test_returns[predicted_ups],
-                                 (-1 * self.model.test_returns[predicted_downs]))
+    def evaluate(self, certainty=0.34, on_set='dev'):
+        all_returns = []
+        for ticker, data in self.model.data.items():
+            if data['X_' + on_set] is None:
+                continue
+            LOGGER.debug(f'Returns calculation for {ticker}')
+            returns = self.calculate_returns(data['X_' + on_set],
+                                             data['y_' + on_set],
+                                             data[on_set + '_returns'],
+                                             certainty)
+            all_returns.append(returns)
 
         LOGGER.info('===\nStrategy returns\n===')
-        self.print_returns_distribution(real_returns)
-        if export_image:
-            self.display_returns(real_returns)
+        return self.print_returns_distribution(np.concatenate(all_returns))
 
-            # LOGGER.info('===\nAll returns\n===')
-            # self.print_returns_distribution(self.model.test_returns)
+    def calculate_returns(self, X, y, ret, certainty):
+        predicted = self.model.predict(np.expand_dims(X, axis=-1))
+        real_ups = y[:, 2]
+        real_downs = y[:, 0]
+        predicted_ups = (predicted[:, 2] > certainty) & (np.argmax(predicted, axis=1) == 2)
+        predicted_downs = (predicted[:, 0] > certainty) & (np.argmax(predicted, axis=1) == 0)
+        returns = np.append(ret[predicted_ups],
+                            (-1 * ret[predicted_downs]))
 
-    def evaluate_report(self):
-        predicted = self.model.predict_classes(self.model.X_test)
-        LOGGER.info(classification_report(self.model.y_test[:, 0], predicted))
+        LOGGER.debug('Real ups count: {}'.format(pd.value_counts(real_ups[predicted_ups])))
+        LOGGER.debug('Real downs count: {}'.format(pd.value_counts(real_downs[predicted_downs])))
+        return returns
 
     def print_returns_distribution(self, returns):
-        neg = np.sum(returns[returns < 0])
-        pos = np.sum(returns[returns > 0])
-        LOGGER.info('Negative returns: ' + str(neg))
-        LOGGER.info('Positive returns: ' + str(pos))
-        LOGGER.info('Pos/Neg ratio: ' + str(pos / (neg * -1)))
+        lose = np.sum(returns[returns < 0])
+        win = np.sum(returns[returns > 0])
+        if lose == 0 and win == 0:
+            return False
+        LOGGER.info('Negative returns: ' + str(lose))
+        LOGGER.info('Positive returns: ' + str(win))
+        LOGGER.info('Pos/Neg ratio: ' + str(win / (lose * -1)))
         LOGGER.info('Sum of returns: ' + str(np.sum(returns)))
-
-    def display_returns(self, returns):
-        import seaborn as sns
-        plot = sns.tsplot(returns)
-        plot.get_figure().savefig(self.model.file_path + '.png')
+        return True

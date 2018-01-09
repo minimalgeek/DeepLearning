@@ -1,7 +1,10 @@
+import numpy as np
 import pandas as pd
 import pandas_datareader as pdr
 from datetime import datetime
 from collections import defaultdict
+from functools import reduce
+import itertools
 import nasdaqpredictor
 import logging
 import os
@@ -13,74 +16,78 @@ class DataLoader:
     MAX_DOWNLOAD_ATTEMPT = 3
 
     def __init__(self,
-                 ticker_file_name: str,
-                 from_date: datetime,
-                 to_date: datetime,
-                 max_shift: int = 30,
-                 return_shift_days: int = 5):
-        self.from_date = from_date
-        self.to_date = to_date
-        self.max_shift = max_shift
+                 ticker_file_name: str = 'tickers/NASDAQ100.csv',
+                 return_shift_days: int = 5,
+                 load_from_google=True):
         self.return_shift_days = return_shift_days
+        self.load_from_google = load_from_google
 
-        self.all_tickers = pd.read_csv(os.path.dirname(__file__) + ticker_file_name)
         self.original_data_dict = None
+        self._attempt_count = 0
+        self.skipped_tickers = pd.DataFrame()
+
+        self.rows = pd.read_csv(ticker_file_name, parse_dates=['from', 'to'])
+        self.rows['from'].fillna(datetime(1990, 1, 1), inplace=True)
+        self.rows['to'].fillna(datetime(2017, 12, 1), inplace=True)
 
     def reload_all(self):
         self.original_data_dict = defaultdict(lambda: None)
-        self._attempt_count = 0
-        self.load_for_tickers(self.all_tickers.ticker)
+        self.load_for_tickers(self.rows)
 
-    def load_for_tickers(self, tickers):
+    def load_for_tickers(self, rows):
         LOGGER.info('Load tickers')
 
-        skipped_tickers = []
-        for ticker in tickers:
-            path = self.construct_full_path(ticker)
+        def data_exists(dat: pd.DataFrame):
+            return dat is not None and len(dat) > 0
+
+        for index, row in rows.iterrows():
+            path = DataLoader.construct_full_path(row)
             if os.path.exists(path):
                 data = pd.read_csv(path)
-            else:
-                data = self._download(skipped_tickers, ticker)
-                if data is not None:
+            elif self.load_from_google:
+                data = self._download(row)
+                if data_exists(data):
                     data.to_csv(path)
+            else:
+                LOGGER.warning('No data for {}'.format(row.values))
+                continue
 
-            if data is not None:
-                self.original_data_dict[ticker] = data
+            if data_exists(data):
+                self.original_data_dict[tuple(row)] = data
 
-        if len(skipped_tickers) > 0 and self._attempt_count < DataLoader.MAX_DOWNLOAD_ATTEMPT:
+        if len(self.skipped_tickers) > 0 and self._attempt_count < DataLoader.MAX_DOWNLOAD_ATTEMPT:
             self._attempt_count += 1
-            LOGGER.info('Retry ({}) for skipped tickers: {}'.format(self._attempt_count, str(skipped_tickers)))
-            self.load_for_tickers(skipped_tickers)
+            LOGGER.info('Retry ({}) for skipped tickers: {}'.format(self._attempt_count, str(self.skipped_tickers)))
+            self.skipped_tickers = pd.DataFrame()
+            self.load_for_tickers(self.skipped_tickers)
 
-    def construct_file_name(self, ticker):
-        return '{}__{}__{}.csv'.format(ticker,
-                                       self.from_date.strftime('%Y_%m_%d'),
-                                       self.to_date.strftime('%Y_%m_%d'))
+    def construct_file_name(row):
+        return '{}__{}__{}.csv'.format(row['ticker'],
+                                       row['from'].strftime('%Y_%m_%d'),
+                                       row['to'].strftime('%Y_%m_%d'))
 
-    def construct_full_path(self, ticker):
+    def construct_full_path(ticker):
         return os.path.abspath(os.path.join(nasdaqpredictor.DATA_PATH,
-                                            self.construct_file_name(ticker)))
+                                            DataLoader.construct_file_name(ticker)))
 
-    def _download(self, skipped_tickers, ticker):
+    def _download(self, row):
         try:
-            original_data = pdr.get_data_yahoo(ticker, self.from_date, self.to_date)
-            original_data.drop(['Volume', 'Adj Close'], axis=1, inplace=True)
+            original_data: pd.DataFrame = pdr.get_data_google(row['ticker'],
+                                                              row['from'].to_datetime(),
+                                                              row['to'].to_datetime())
+            original_data.drop(['Volume', 'Adj Close'], axis=1, inplace=True, errors='ignore')
             return original_data
         except Exception as e:
             LOGGER.error(e)
-            skipped_tickers.append(ticker)
+            self.skipped_tickers = self.skipped_tickers.append(row)
             return None
-        else:
-            LOGGER.info(ticker + ' downloaded successfully')
 
 
 class DataTransformer:
     def __init__(self,
                  data_loader: DataLoader,
-                 max_shift: int = 30,
-                 return_shift_days: int = -5):
+                 return_shift_days: int = 3):
         self.data_loader: DataLoader = data_loader
-        self.max_shift = max_shift
         self.return_shift_days = return_shift_days
         self.transformed_data_dict = None
 
@@ -89,9 +96,10 @@ class DataTransformer:
         self.data_loader.reload_all()
 
         for ticker, data in self.data_loader.original_data_dict.items():
+            LOGGER.info('Transform {}'.format(ticker))
             for step in self.steps():
                 try:
-                    data = step(data)
+                    step(data)
                 except Exception as e:
                     LOGGER.error(e)
 
@@ -101,52 +109,44 @@ class DataTransformer:
 
     def steps(self):
         yield self._set_index_column_if_necessary
-        yield self._shift
-        yield self._add_bulls
-        yield self._add_gts
-        yield self._add_return
+        yield self._append_new_features
         yield self._clean_structure
 
-    def _clean_structure(self, data) -> pd.DataFrame:
-        data = data.drop(['Open', 'High', 'Low', 'Close'], axis=1, level=1)
-        data.columns = data.columns.droplevel()
-        data.dropna(inplace=True)
-        return data
-
-    def _add_return(self, data) -> pd.DataFrame:
-        shift_column = 'Shift ' + str(self.return_shift_days)
-
-        shifted = data.iloc[:, [0, 1, 2, 3]].shift(self.return_shift_days)
-        shifted.columns = pd.MultiIndex.from_product([[shift_column], ['Open', 'High', 'Low', 'Close']])
-        data = pd.concat([data, shifted], axis=1)
-        cls_5 = data[shift_column, 'Close']
-        cls = data['Shift 0', 'Close']
-        data['Shift 0', 'Return'] = 100 * (cls_5 - cls) / cls_5
-        return data
-
-    def _add_gts(self, data) -> pd.DataFrame:
-        for i in range(0, self.max_shift):
-            opn = data['Shift ' + str(i), 'Open']
-            prv_cls = data['Shift ' + str(i + 1), 'Close']
-            data['Shift ' + str(i), 'GT ' + str(i)] = 100 * (opn - prv_cls) / opn
-        return data
-
-    def _add_bulls(self, data) -> pd.DataFrame:
-        for i in range(0, self.max_shift):
-            cls = data['Shift ' + str(i), 'Close']
-            opn = data['Shift ' + str(i), 'Open']
-            data['Shift ' + str(i), 'Bull ' + str(i)] = 100 * (cls - opn) / cls
-        return data
-
-    def _shift(self, data) -> pd.DataFrame:
-        data.columns = pd.MultiIndex.from_product([['Shift 0'], ['Open', 'High', 'Low', 'Close']])
-        for i in range(1, self.max_shift + 1):
-            shifted = data.iloc[:, [0, 1, 2, 3]].shift(i)
-            shifted.columns = pd.MultiIndex.from_product([['Shift ' + str(i)], ['Open', 'High', 'Low', 'Close']])
-            data = pd.concat([data, shifted], axis=1)
-        return data
-
-    def _set_index_column_if_necessary(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _set_index_column_if_necessary(self, data: pd.DataFrame):
         if 'Date' in data.columns:
             data.set_index('Date', inplace=True)
-        return data
+
+    def _append_new_features(self, data: pd.DataFrame):
+        basic_columns = data.columns
+
+        def feature(df, first_col, second_col, base_col):
+            return (df[first_col] - df[second_col]) / df[base_col]
+
+        def add_extra_columns(df, cols):
+            pool = []
+            for left, right in itertools.product(cols, cols):
+                pair1 = left + right
+                pair2 = right + left
+                if left != right and pair1 not in pool and pair2 not in pool:
+                    df[left + '/' + right] = feature(df, left, right, 'Close')
+                    pool.append(pair1)
+
+        add_extra_columns(data, basic_columns)
+
+        days = [5]
+        for col, day in itertools.product(basic_columns, days):
+            data[col + ' ' + str(day) + ' MA'] = data[col].rolling(day).mean()
+            data[col + ' ' + str(day) + ' max'] = data[col].rolling(day).max()
+            data[col + ' ' + str(day) + ' min'] = data[col].rolling(day).min()
+        data.dropna(inplace=True)
+
+        rolling_features = list(filter(lambda col: (' MA' in col) or (' max' in col) or (' min' in col), data.columns))
+        add_extra_columns(data, rolling_features)
+
+        ret = 100 * data['Close'].pct_change(self.return_shift_days).shift(-self.return_shift_days)
+        features_to_drop = list(filter(lambda col_name: '/' not in col_name, data.columns))
+        data.drop(features_to_drop, axis=1, inplace=True)
+        data['Return'] = ret
+
+    def _clean_structure(self, data: pd.DataFrame):
+        data.replace([np.inf, -np.inf, np.NaN, np.NAN], 0.0, inplace=True)

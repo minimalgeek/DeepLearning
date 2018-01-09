@@ -35,21 +35,21 @@ def test_data_path():
 # Loader
 
 def test_loader_init(loader: DataLoader):
-    assert len(loader.all_tickers) == 139
+    assert len(loader.all_tickers) == 138
     assert loader.all_tickers.ticker.iloc[0] == 'AAL'
     assert loader.all_tickers.ticker.iloc[-1] == 'XRAY'
 
 
-def test_construct_file_name(loader: DataLoader):
-    file_name = loader.construct_file_name('AAPL')
+def test_construct_file_name():
+    file_name = DataLoader.construct_file_name('AAPL')
     assert file_name == 'AAPL__2000_01_01__2017_01_01.csv'
-    file_name = loader.construct_file_name('IBM')
+    file_name = DataLoader.construct_file_name('IBM')
     assert file_name == 'IBM__2000_01_01__2017_01_01.csv'
 
 
 def test_load_all(loader: DataLoader):
     loader.reload_all()
-    assert len(loader.original_data_dict.values()) == 139
+    assert len(loader.original_data_dict.values()) == 138
 
 
 # Transformer
@@ -62,4 +62,4 @@ def test_transformer_init(transformer: DataTransformer):
 def test_shift(small_transformer: DataTransformer):
     small_transformer.transform()
     assert len(small_transformer.transformed_data_dict) == 5
-    assert small_transformer.transformed_data_dict['AAL'].shape == (2801, 61)
+    assert small_transformer.transformed_data_dict['AAL'].shape == (2833, 9)

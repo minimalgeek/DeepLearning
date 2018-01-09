@@ -4,6 +4,7 @@ import logging
 
 DATA_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../data/'))
 PRED_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../prediction/'))
+TENSORBOARD_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../tensorboard/'))
 
 logging.config.dictConfig({
     "version": 1,
