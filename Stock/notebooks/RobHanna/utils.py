@@ -1,6 +1,16 @@
 import pandas as pd
 import backtrader as bt
 
+def hello():
+    pass
+
+def read_ami_SPY_data():
+    spy_data = pd.read_excel('Example_Python.xlsx')
+    spy_data.rename(columns={'Date/Time':'Date', 'O': 'Open', 'H': 'High', 'L': 'Low', 'C': 'Close', 'V': 'Volume'}, inplace=True)
+    spy_data.drop('Ticker', axis=1, inplace=True)
+    spy_data.set_index('Date', inplace=True)
+    return spy_data
+
 def read_data(filename):
     data = pd.read_excel(filename, skiprows=1, index_col='Date')
     data.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
