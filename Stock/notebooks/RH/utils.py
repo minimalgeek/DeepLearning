@@ -28,6 +28,9 @@ class BaseStrategy(bt.Strategy):
     def next(self):
         pass
     
+    def canceled(self):
+        pass
+    
     def log(self, txt, dt=None):
         dt = dt or self.datas[0].datetime.date(0)
         print('%s, %s' % (dt.isoformat(), txt))
@@ -49,3 +52,4 @@ class BaseStrategy(bt.Strategy):
 
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
             self.log('Order Canceled/Margin/Rejected')
+            self.canceled()
