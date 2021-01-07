@@ -109,7 +109,7 @@ llvmlite==0.16.0
 locket==0.2.0
 Logbook==1.1.0
 lru-dict==1.1.6
-lxml==3.7.2
+lxml==4.6.2
 mako==1.0.7
 Markdown==2.6.8
 MarkupSafe==1.0
