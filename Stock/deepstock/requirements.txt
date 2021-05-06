@@ -67,7 +67,7 @@ Events==0.2.2
 fastcache==1.0.2
 Flask==0.12.2
 Flask-Compress==1.4.0
-Flask-Cors==3.0.2
+Flask-Cors==3.0.9
 Flask-PyMongo==0.5.1
 Flask-RESTful==0.3.6
 Flask-SeaSurf==0.2.2
