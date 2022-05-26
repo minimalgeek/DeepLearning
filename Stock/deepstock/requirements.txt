@@ -242,7 +242,7 @@ traitlets==4.3.2
 twilio==5.7.0
 Twisted==17.1.0
 typing==3.6.1
-ujson==1.35
+ujson==5.2.0
 unicodecsv==0.14.1
 Unidecode==0.4.21
 urllib3==1.22
