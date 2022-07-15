@@ -53,7 +53,7 @@ dask==0.15.1
 datashape==0.5.4
 decorator==4.1.2
 dill==0.2.6
-distributed==1.18.0
+distributed==2021.10.0
 Django==1.11
 djangorestframework==3.6.3
 docopt==0.6.2
