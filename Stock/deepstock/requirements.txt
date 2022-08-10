@@ -121,7 +121,7 @@ mpmath==0.19
 msgpack-python==0.4.8
 multipledispatch==0.4.9
 murmurhash==0.26.4
-nbconvert==5.2.1
+nbconvert==6.3.0
 nbformat==4.3.0
 networkx==1.11
 nltk==3.2.2
