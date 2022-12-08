@@ -23,7 +23,7 @@ Bottleneck==1.2.1
 bz2file==0.98
 cachetools==2.0.0
 Cerberus==0.9.2
-certifi==2017.7.27.1
+certifi==2022.12.7
 cffi==1.10.0
 chardet==3.0.4
 chest==0.2.3
